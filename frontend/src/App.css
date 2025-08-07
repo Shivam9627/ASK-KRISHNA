@@ -1,0 +1,31 @@
+.app {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-image: linear-gradient(to bottom, rgba(245, 240, 225, 0.9), rgba(245, 240, 225, 0.9)), url('/public/bg-pattern.svg');
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
+}
+
+.main-content {
+  flex: 1;
+  padding: 20px 0;
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Responsive styles */
+@media (max-width: 768px) {
+  .main-content {
+    padding: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  .main-content {
+    padding: 10px;
+  }
+}

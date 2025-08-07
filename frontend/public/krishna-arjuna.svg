@@ -1,0 +1,72 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600">
+  <!-- Background elements -->
+  <rect width="800" height="600" fill="#f5f0e1" opacity="0.3"/>
+  
+  <!-- Stylized chariot -->
+  <path d="M150,450 C150,450 250,500 400,500 C550,500 650,450 650,450 L650,400 C650,400 550,450 400,450 C250,450 150,400 150,400 Z" fill="#d4a76a"/>
+  <path d="M200,400 L200,300 L600,300 L600,400" stroke="#8b4513" stroke-width="10" fill="none"/>
+  <circle cx="250" cy="500" r="40" fill="#8b4513"/>
+  <circle cx="550" cy="500" r="40" fill="#8b4513"/>
+  
+  <!-- Krishna figure (stylized) -->
+  <g transform="translate(300, 250)">
+    <!-- Body -->
+    <path d="M0,0 C-10,30 -20,100 -20,150 C-20,170 -10,180 0,180 C10,180 20,170 20,150 C20,100 10,30 0,0 Z" fill="#138808"/>
+    
+    <!-- Head -->
+    <circle cx="0" cy="-20" r="30" fill="#ffcc99"/>
+    
+    <!-- Crown/Peacock feather -->
+    <path d="M0,-50 C-5,-60 -10,-70 -5,-80 C0,-90 10,-85 15,-75 C20,-65 10,-55 0,-50 Z" fill="#ff9933"/>
+    <path d="M0,-50 C5,-60 10,-70 5,-80 C0,-90 -10,-85 -15,-75 C-20,-65 -10,-55 0,-50 Z" fill="#ff9933"/>
+    
+    <!-- Face features -->
+    <circle cx="-10" cy="-25" r="3" fill="#000"/>
+    <circle cx="10" cy="-25" r="3" fill="#000"/>
+    <path d="M-5,-15 C-3,-13 3,-13 5,-15" stroke="#000" stroke-width="1.5" fill="none"/>
+    
+    <!-- Flute -->
+    <path d="M-30,-10 L30,-10" stroke="#8b4513" stroke-width="3"/>
+    
+    <!-- Arms -->
+    <path d="M-20,30 C-40,20 -50,0 -30,-10" stroke="#ffcc99" stroke-width="10" fill="none"/>
+    <path d="M20,30 C40,20 50,0 30,-10" stroke="#ffcc99" stroke-width="10" fill="none"/>
+  </g>
+  
+  <!-- Arjuna figure (stylized) -->
+  <g transform="translate(500, 250)">
+    <!-- Body -->
+    <path d="M0,0 C-10,30 -20,100 -20,150 C-20,170 -10,180 0,180 C10,180 20,170 20,150 C20,100 10,30 0,0 Z" fill="#000080"/>
+    
+    <!-- Head -->
+    <circle cx="0" cy="-20" r="30" fill="#ffcc99"/>
+    
+    <!-- Headband -->
+    <path d="M-30,-30 L30,-30" stroke="#ff9933" stroke-width="5"/>
+    
+    <!-- Face features -->
+    <circle cx="-10" cy="-25" r="3" fill="#000"/>
+    <circle cx="10" cy="-25" r="3" fill="#000"/>
+    <path d="M-5,-15 C-3,-13 3,-13 5,-15" stroke="#000" stroke-width="1.5" fill="none"/>
+    
+    <!-- Bow -->
+    <path d="M30,50 C60,30 60,-30 30,-50" stroke="#8b4513" stroke-width="5" fill="none"/>
+    <path d="M30,0 L60,0" stroke="#8b4513" stroke-width="2"/>
+    
+    <!-- Arms -->
+    <path d="M-20,30 C-30,40 -20,60 -10,70" stroke="#ffcc99" stroke-width="10" fill="none"/>
+    <path d="M20,30 C30,40 30,0 30,-50" stroke="#ffcc99" stroke-width="10" fill="none"/>
+  </g>
+  
+  <!-- Decorative elements -->
+  <circle cx="400" cy="100" r="50" fill="#ff9933" opacity="0.2"/>
+  <path d="M350,150 L450,150" stroke="#138808" stroke-width="3" opacity="0.5"/>
+  
+  <!-- Om symbol -->
+  <g transform="translate(400, 80) scale(0.5)">
+    <path d="M0,0 C-20,0 -40,20 -40,40 C-40,60 -20,80 0,80 C20,80 40,60 40,40 C40,20 20,0 0,0 Z" fill="none" stroke="#000080" stroke-width="5"/>
+    <path d="M0,-40 L0,0" stroke="#000080" stroke-width="5"/>
+    <path d="M0,0 C-20,-20 -40,0 -40,20" stroke="#000080" stroke-width="5" fill="none"/>
+    <path d="M0,0 C20,-20 40,0 40,20" stroke="#000080" stroke-width="5" fill="none"/>
+  </g>
+</svg>
