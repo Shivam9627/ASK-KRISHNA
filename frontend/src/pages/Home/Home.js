@@ -1,6 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { FaArrowRight, FaComments, FaHistory, FaLanguage } from 'react-icons/fa';
+import { FaArrowRight, FaComments, FaHistory, FaLanguage, FaTachometerAlt } from 'react-icons/fa';
 import './Home.css';
 
 const Home = () => {
@@ -51,6 +51,16 @@ const Home = () => {
             <h3 className="feature-title">Chat History</h3>
             <p className="feature-description">
               Save and review your previous conversations when you create an account
+            </p>
+          </div>
+
+          <div className="feature-card">
+            <div className="feature-icon">
+              <FaTachometerAlt />
+            </div>
+            <h3 className="feature-title">Personal Dashboard</h3>
+            <p className="feature-description">
+              Track your progress and manage your profile with our interactive dashboard
             </p>
           </div>
         </div>

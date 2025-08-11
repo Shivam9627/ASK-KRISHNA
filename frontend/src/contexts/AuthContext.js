@@ -29,6 +29,55 @@ export function AuthProvider({ children }) {
     
     setLoading(false);
   }, []);
+
+  // On mount, if token exists, refresh profile from backend to ensure latest data
+  useEffect(() => {
+    const refreshProfile = async () => {
+      try {
+        const stored = localStorage.getItem('user');
+        if (!stored) return;
+        const storedUser = JSON.parse(stored);
+        if (!storedUser?.token) return;
+        // Fetch profile
+        const profile = await authService.getProfile();
+        const merged = {
+          ...storedUser,
+          username: profile.username,
+          email: profile.email,
+          created_at: profile.created_at,
+          profileImage: profile.profileImage,
+        };
+        // Ensure token in storage is a serialized JSON string
+        if (merged && merged.token && typeof merged.token === 'object') {
+          merged.token = JSON.stringify(merged.token);
+        }
+        localStorage.setItem('user', JSON.stringify(merged));
+        setCurrentUser(merged);
+      } catch (e) {
+        // ignore fetch errors
+      }
+    };
+    refreshProfile();
+  }, []);
+  
+  // Listen for profile updates
+  useEffect(() => {
+    const handleUserUpdate = (event) => {
+      setCurrentUser(event.detail);
+    };
+    
+    window.addEventListener('userUpdated', handleUserUpdate);
+    
+    return () => {
+      window.removeEventListener('userUpdated', handleUserUpdate);
+    };
+  }, []);
+  
+  // Function to update current user
+  const updateCurrentUser = (userData) => {
+    setCurrentUser(userData);
+    localStorage.setItem('user', JSON.stringify(userData));
+  };
   
   // Function to register a new user
   const register = async (username, email, password) => {
@@ -102,7 +151,8 @@ export function AuthProvider({ children }) {
     logout,
     incrementQuestionCount,
     resetQuestionCount,
-    clearChatHistory
+    clearChatHistory,
+    updateCurrentUser
   };
   
   return (

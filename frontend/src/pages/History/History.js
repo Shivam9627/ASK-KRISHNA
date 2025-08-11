@@ -10,24 +10,53 @@ const History = () => {
   const [chatHistory, setChatHistory] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredHistory, setFilteredHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const { currentUser } = useAuth();
   
   // Fetch real chat history from backend
   useEffect(() => {
-    if (!currentUser) {
-      setChatHistory([]);
-      setFilteredHistory([]);
-      return;
-    }
-    chatService.getChatHistory()
-      .then((history) => {
-        setChatHistory(history);
-        setFilteredHistory(history);
-      })
-      .catch(() => {
+    const fetchHistory = async () => {
+      if (!currentUser) {
         setChatHistory([]);
         setFilteredHistory([]);
-      });
+        setLoading(false);
+        return;
+      }
+      
+      try {
+        setLoading(true);
+        setError('');
+        console.log('🔍 Fetching chat history for user:', currentUser.user_id);
+        
+        const history = await chatService.getChatHistory();
+        console.log('✅ Chat history received:', history);
+        
+        // Ensure history is an array
+        let historyArray = Array.isArray(history) ? history : [];
+        // Ensure most recent first on client too, in case backend order changes
+        historyArray = historyArray.sort((a, b) => {
+          const ta = (a.created_at ?? 0);
+          const tb = (b.created_at ?? 0);
+          if (tb !== ta) return tb - ta;
+          // Fallback to _id timestamp if needed
+          return (b._id || '').localeCompare(a._id || '');
+        });
+        console.log('📊 Processed history array:', historyArray);
+        
+        setChatHistory(historyArray);
+        setFilteredHistory(historyArray);
+      } catch (err) {
+        console.error('❌ Error fetching chat history:', err);
+        setError('Failed to load chat history');
+        setChatHistory([]);
+        setFilteredHistory([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    
+    fetchHistory();
   }, [currentUser]);
   
   // Filter history based on search term
@@ -40,8 +69,8 @@ const History = () => {
     const filtered = chatHistory.filter(chat => {
       const lowerSearchTerm = searchTerm.toLowerCase();
       return (
-        chat.title.toLowerCase().includes(lowerSearchTerm) ||
-        chat.messages.some(msg => msg.content.toLowerCase().includes(lowerSearchTerm))
+        chat.title?.toLowerCase().includes(lowerSearchTerm) ||
+        chat.messages?.some(msg => msg.content.toLowerCase().includes(lowerSearchTerm))
       );
     });
     
@@ -49,20 +78,52 @@ const History = () => {
   }, [searchTerm, chatHistory]);
   
   const formatDate = (dateString) => {
-    const options = { year: 'numeric', month: 'long', day: 'numeric' };
-    return new Date(dateString).toLocaleDateString(undefined, options);
+    try {
+      const options = { year: 'numeric', month: 'long', day: 'numeric' };
+      return new Date(dateString).toLocaleDateString(undefined, options);
+    } catch (e) {
+      return 'Unknown date';
+    }
   };
   
   const deleteChat = async (id) => {
     if (!currentUser) return;
     try {
       await chatService.deleteChat(id);
-      setChatHistory(prevHistory => prevHistory.filter(chat => chat.id !== id));
-      setFilteredHistory(prevHistory => prevHistory.filter(chat => chat.id !== id));
+      setChatHistory(prevHistory => prevHistory.filter(chat => chat._id !== id));
+      setFilteredHistory(prevHistory => prevHistory.filter(chat => chat._id !== id));
     } catch (e) {
-      // Optionally show error
+      console.error('Error deleting chat:', e);
+      setError('Failed to delete chat');
     }
   };
+
+  const deleteAllChats = async () => {
+    if (!currentUser) return;
+    if (!window.confirm('Delete all your chat history? This cannot be undone.')) return;
+    try {
+      await chatService.deleteAllChats();
+      setChatHistory([]);
+      setFilteredHistory([]);
+    } catch (e) {
+      console.error('Error deleting all chats:', e);
+      setError('Failed to delete all chats');
+    }
+  };
+  
+  if (loading) {
+    return (
+      <div className="history-container">
+        <div className="history-header">
+          <h1>Your Chat History</h1>
+        </div>
+        <div className="loading-state">
+          <div className="loading-spinner"></div>
+          <p>Loading your chat history...</p>
+        </div>
+      </div>
+    );
+  }
   
   return (
     <div className="history-container">
@@ -76,8 +137,20 @@ const History = () => {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
           />
+          {currentUser && filteredHistory.length > 0 && (
+            <button className="delete-all-button" onClick={deleteAllChats} title="Delete all history">
+              <FaTrash /> Delete All
+            </button>
+          )}
         </div>
       </div>
+      
+      {error && (
+        <div className="error-message">
+          {error}
+        </div>
+      )}
+      
       {!currentUser ? (
         <div className="empty-history">
           <h2>Please log in to view your chat history.</h2>
@@ -93,16 +166,16 @@ const History = () => {
       ) : (
         <div className="history-list">
           {filteredHistory.map(chat => (
-            <div key={chat.id} className="history-item">
+            <div key={chat._id} className="history-item">
               <div className="history-item-header">
-                <h3 className="history-item-title">{chat.title}</h3>
+                <h3 className="history-item-title">{chat.title || 'Untitled Conversation'}</h3>
                 <div className="history-item-actions">
                   <span className="history-item-date">
                     <FaCalendarAlt /> {formatDate(chat.date)}
                   </span>
                   <button 
                     className="delete-chat-button" 
-                    onClick={() => deleteChat(chat.id)}
+                    onClick={() => deleteChat(chat._id)}
                     title="Delete this conversation"
                   >
                     <FaTrash />
@@ -111,11 +184,11 @@ const History = () => {
               </div>
               
               <div className="history-item-preview">
-                {chat.messages.slice(0, 2).map((message, index) => (
+                {chat.messages?.slice(0, 2).map((message, index) => (
                   <div key={index} className={`preview-message ${message.role}`}>
                     <strong>{message.role === 'user' ? 'You' : 'Krishna'}:</strong>
                     <span>
-                      {message.content.length > 100
+                      {message.content?.length > 100
                         ? `${message.content.substring(0, 100)}...`
                         : message.content}
                     </span>
@@ -123,7 +196,7 @@ const History = () => {
                 ))}
               </div>
               
-              <Link to={`/chat?id=${chat.id}`} className="view-full-chat">
+              <Link to={`/chat?id=${chat._id}`} className="view-full-chat">
                 View full conversation <FaArrowRight />
               </Link>
             </div>

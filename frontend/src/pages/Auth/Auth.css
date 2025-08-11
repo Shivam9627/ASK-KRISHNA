@@ -108,20 +108,53 @@
 }
 
 .auth-footer {
-  margin-top: 25px;
   text-align: center;
+  margin-top: 20px;
+}
+
+.auth-footer p {
+  margin: 0;
   color: var(--text-color);
 }
 
 .auth-footer a {
   color: var(--primary-color);
+  text-decoration: none;
   font-weight: 600;
-  transition: color 0.3s ease;
 }
 
 .auth-footer a:hover {
-  color: var(--secondary-color);
   text-decoration: underline;
+}
+
+.resend-button,
+.back-button {
+  background: none;
+  border: none;
+  color: var(--primary-color);
+  cursor: pointer;
+  font-size: 0.9rem;
+  margin: 5px 10px;
+  padding: 8px 12px;
+  border-radius: 4px;
+  transition: background-color 0.3s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.resend-button:hover,
+.back-button:hover {
+  background-color: rgba(25, 118, 210, 0.1);
+}
+
+.resend-button:disabled {
+  color: var(--border-color);
+  cursor: not-allowed;
+}
+
+.back-button svg {
+  font-size: 0.8rem;
 }
 
 /* Responsive styles */

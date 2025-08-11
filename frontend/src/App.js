@@ -12,6 +12,8 @@ import Chat from './pages/Chat/Chat';
 import Login from './pages/Auth/Login';
 import Register from './pages/Auth/Register';
 import History from './pages/History/History';
+import Profile from './pages/Profile/Profile';
+import Dashboard from './pages/Dashboard/Dashboard';
 import PrivateRoute from './components/PrivateRoute/PrivateRoute';
 
 function App() {
@@ -25,10 +27,26 @@ function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
           <Route 
+            path="/dashboard" 
+            element={
+              <PrivateRoute>
+                <Dashboard />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
             path="/history" 
             element={
               <PrivateRoute>
                 <History />
+              </PrivateRoute>
+            } 
+          />
+          <Route 
+            path="/profile" 
+            element={
+              <PrivateRoute>
+                <Profile />
               </PrivateRoute>
             } 
           />

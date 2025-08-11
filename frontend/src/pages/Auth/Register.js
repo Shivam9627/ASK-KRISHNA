@@ -1,20 +1,24 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { FaUser, FaEnvelope, FaLock, FaUserPlus } from 'react-icons/fa';
+import { FaUser, FaEnvelope, FaLock, FaUserPlus, FaShieldAlt, FaArrowLeft } from 'react-icons/fa';
 import { useAuth } from '../../contexts/AuthContext';
+import { authService } from '../../services/api';
 import './Auth.css';
 
 const Register = () => {
+  const [step, setStep] = useState(1); // 1: form, 2: OTP verification
   const [username, setUsername] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [otp, setOtp] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [otpSent, setOtpSent] = useState(false);
   const { register } = useAuth();
   const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  const handleSendOTP = async (e) => {
     e.preventDefault();
     
     // Simple validation
@@ -33,15 +37,124 @@ const Register = () => {
     try {
       setError('');
       setLoading(true);
-      await register(username, email, password);
-      navigate('/chat');
+      await authService.sendRegistrationOTP(email);
+      setOtpSent(true);
+      setStep(2);
     } catch (err) {
-      setError('Failed to create an account');
+      setError(err.response?.data?.error || 'Failed to send OTP');
       console.error(err);
     } finally {
       setLoading(false);
     }
   };
+
+  const handleVerifyOTP = async (e) => {
+    e.preventDefault();
+    
+    if (!otp.trim()) {
+      return setError('Please enter the OTP');
+    }
+    
+    try {
+      setError('');
+      setLoading(true);
+      
+      // Verify OTP
+      await authService.verifyRegistrationOTP(email, otp);
+      
+      // Register user
+      await register(username, email, password);
+      navigate('/chat');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to verify OTP or create account');
+      console.error(err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOTP = async () => {
+    try {
+      setError('');
+      setLoading(true);
+      await authService.sendRegistrationOTP(email);
+      setError('');
+    } catch (err) {
+      setError(err.response?.data?.error || 'Failed to resend OTP');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const goBack = () => {
+    setStep(1);
+    setOtp('');
+    setError('');
+  };
+
+  if (step === 2) {
+    return (
+      <div className="auth-container">
+        <div className="auth-card">
+          <div className="auth-header">
+            <h2>Verify Your Email</h2>
+            <p>We've sent a 6-digit code to {email}</p>
+          </div>
+          
+          {error && <div className="auth-error">{error}</div>}
+          
+          <form className="auth-form" onSubmit={handleVerifyOTP}>
+            <div className="form-group">
+              <label htmlFor="otp">
+                <FaShieldAlt className="input-icon" />
+                Enter OTP
+              </label>
+              <input
+                type="text"
+                id="otp"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                placeholder="Enter 6-digit code"
+                maxLength="6"
+                required
+                style={{ textAlign: 'center', letterSpacing: '2px', fontSize: '1.2rem' }}
+              />
+            </div>
+            
+            <button type="submit" className="auth-button" disabled={loading}>
+              {loading ? (
+                'Verifying...'
+              ) : (
+                <>
+                  <FaShieldAlt className="button-icon" />
+                  Verify & Create Account
+                </>
+              )}
+            </button>
+          </form>
+          
+          <div className="auth-footer">
+            <button 
+              type="button" 
+              onClick={handleResendOTP} 
+              disabled={loading}
+              className="resend-button"
+            >
+              Resend OTP
+            </button>
+            <button 
+              type="button" 
+              onClick={goBack}
+              className="back-button"
+            >
+              <FaArrowLeft />
+              Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="auth-container">
@@ -53,7 +166,7 @@ const Register = () => {
         
         {error && <div className="auth-error">{error}</div>}
         
-        <form className="auth-form" onSubmit={handleSubmit}>
+        <form className="auth-form" onSubmit={handleSendOTP}>
           <div className="form-group">
             <label htmlFor="username">
               <FaUser className="input-icon" />
@@ -116,11 +229,11 @@ const Register = () => {
           
           <button type="submit" className="auth-button" disabled={loading}>
             {loading ? (
-              'Creating account...'
+              'Sending OTP...'
             ) : (
               <>
                 <FaUserPlus className="button-icon" />
-                Register
+                Send OTP
               </>
             )}
           </button>

@@ -30,6 +30,28 @@
   gap: 10px;
 }
 
+.mic-button,
+.voice-settings {
+  background: rgba(255, 255, 255, 0.2);
+  border: none;
+  color: var(--light-text);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background-color 0.3s ease;
+}
+.mic-button.active {
+  background: rgba(255, 99, 71, 0.5);
+}
+.mic-button:hover,
+.voice-settings:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
 .language-toggle,
 .clear-chat {
   background: rgba(255, 255, 255, 0.2);
@@ -243,11 +265,19 @@
   .message.assistant.loading {
     max-width: 70%;
   }
+  .message-bubble {
+    font-size: 0.95rem;
+    line-height: 1.5;
+  }
 }
 
 @media (max-width: 480px) {
   .chat-header h1 {
     font-size: 1.3rem;
+  }
+  .messages-container {
+    padding: 14px;
+    gap: 12px;
   }
   
   .language-toggle,
@@ -259,6 +289,11 @@
   .message {
     max-width: 95%;
   }
+  .message-bubble {
+    font-size: 0.92rem;
+    line-height: 1.45;
+    padding: 10px 14px;
+  }
   
   .input-form input {
     padding: 10px 15px;
@@ -267,5 +302,190 @@
   .input-form button {
     width: 40px;
     height: 40px;
+  }
+}
+
+.message .speak-button {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  font-size: 16px;
+  padding: 5px;
+  border-radius: 50%;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.message .speak-button:hover {
+  background-color: rgba(0,0,0,0.1);
+}
+
+.voice-controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px;
+  padding: 10px 15px;
+  background: #fafafa;
+  border-top: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-color);
+}
+.voice-controls .control label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+  color: var(--text-color);
+}
+.voice-controls .control select {
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid var(--border-color);
+}
+.voice-controls .control input[type="range"] {
+  width: 100%;
+  margin-top: 6px;
+}
+.voice-controls .control.toggle {
+  display: flex;
+  align-items: center;
+}
+
+.message-row {
+  width: 100%;
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 16px;
+}
+.user-row {
+  justify-content: flex-end;
+}
+.assistant-row {
+  justify-content: flex-start;
+}
+.message-bubble {
+  transition: background 0.2s, color 0.2s;
+  font-size: 0.98rem;
+  line-height: 1.55;
+  word-break: break-word;
+}
+.user-bubble {
+  background: #1976d2;
+  color: #fff;
+  border-radius: 18px 18px 4px 18px;
+}
+.assistant-bubble {
+  background: #f5f5f5;
+  color: #222;
+  border-radius: 18px 18px 18px 4px;
+}
+.listen-btn {
+  background: #f0f0f0;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 1.5em;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  margin-right: 10px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+.listen-btn:active,
+.listen-btn:focus,
+.listen-btn:hover {
+  background: #e0f7fa;
+  outline: none;
+}
+
+/* Login prompt styles */
+.login-prompt {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: calc(100vh - 200px);
+  padding: 20px;
+}
+
+.login-prompt-content {
+  text-align: center;
+  max-width: 400px;
+  padding: 40px;
+  background-color: var(--light-text);
+  border-radius: 12px;
+  box-shadow: 0 5px 20px var(--shadow-color);
+}
+
+.login-prompt-logo {
+  width: 80px;
+  height: 80px;
+  margin-bottom: 20px;
+}
+
+.login-prompt-content h2 {
+  color: var(--primary-color);
+  margin-bottom: 15px;
+  font-size: 1.5rem;
+}
+
+.login-prompt-content p {
+  color: var(--text-color);
+  margin-bottom: 30px;
+  line-height: 1.5;
+}
+
+.login-prompt-actions {
+  display: flex;
+  gap: 15px;
+  justify-content: center;
+}
+
+.login-button,
+.register-button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 1rem;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  text-decoration: none;
+  display: inline-block;
+}
+
+.login-button {
+  background-color: var(--primary-color);
+  color: var(--light-text);
+}
+
+.login-button:hover {
+  background-color: var(--secondary-color);
+}
+
+.register-button {
+  background-color: transparent;
+  color: var(--primary-color);
+  border: 2px solid var(--primary-color);
+}
+
+.register-button:hover {
+  background-color: var(--primary-color);
+  color: var(--light-text);
+}
+
+/* Responsive design for login prompt */
+@media (max-width: 480px) {
+  .login-prompt-actions {
+    flex-direction: column;
+  }
+  
+  .login-prompt-content {
+    padding: 30px 20px;
   }
 }
