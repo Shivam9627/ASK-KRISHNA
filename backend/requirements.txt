@@ -5,7 +5,7 @@ pymongo==4.6.1
 python-dotenv==1.0.1
 streamlit==1.32.0
 qdrant-client==1.7.1
-fastembed==0.7.1
+fastembed==0.3.1
 groq==0.4.1
 llama-index-core==0.13.2
 llama-index-embeddings-fastembed==0.1.2
