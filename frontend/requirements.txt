@@ -1,0 +1,31 @@
+# Frontend (React) dependencies
+# These packages should be installed using npm or yarn
+
+# Core dependencies
+npm install react@18.2.0
+npm install react-dom@18.2.0
+npm install react-scripts@5.0.1
+
+# Routing
+npm install react-router-dom@6.20.0
+
+# HTTP client
+npm install axios@1.6.2
+
+# UI components and styling
+npm install react-icons@4.12.0
+npm install react-markdown@9.0.1
+
+# Testing
+npm install @testing-library/jest-dom@5.17.0
+npm install @testing-library/react@13.4.0
+npm install @testing-library/user-event@13.5.0
+
+# Performance monitoring
+npm install web-vitals@2.1.4
+
+# Alternative: Install all dependencies at once
+# npm install
+
+# Note: This file is for documentation purposes only.
+# Actual dependency management is handled through package.json and package-lock.json

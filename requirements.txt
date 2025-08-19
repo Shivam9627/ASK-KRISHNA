@@ -1,11 +1,24 @@
+# Combined requirements for Ask Krishna 2 project
+
 # Backend Python dependencies
-flask
-flask-cors
-python-dotenv
-pymongo
-bson
+flask==3.0.3
+flask-cors==4.0.0
+pymongo==4.6.1
+python-dotenv==1.0.1
+streamlit==1.32.0
+qdrant-client==1.7.0
+fastembed==0.2.2
+groq==0.4.1
+llama-index-core>=0.10.11
+llama-index-embeddings-fastembed>=0.1.4
+llama-index-llms-groq>=0.1.4
+llama-index-vector-stores-qdrant>=0.1.3
+bcrypt>=4.0.1
 
-# Add any other backend dependencies here...
+# Note: The following are standard Python libraries and don't need to be installed separately
+# - bson (included with pymongo)
+# - smtplib (standard library)
+# - email (standard library)
 
-# Frontend (React) dependencies - install separately with npm/yarn
-# See frontend/package.json for details
+# Frontend dependencies are managed through npm/yarn
+# See frontend/package.json for details or frontend/requirements.txt for installation commands
