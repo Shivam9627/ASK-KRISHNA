@@ -180,8 +180,8 @@
 .input-form {
   display: flex;
   padding: 15px;
-  background-color: var(--hover-color);
   border-top: 1px solid var(--border-color);
+  background-color: var(--light-text);
 }
 
 .input-form input {
@@ -195,28 +195,69 @@
 }
 
 .input-form input:focus {
-  border-color: var(--primary-color);
+  border-color: var(--accent-color);
 }
 
+/* Updated styles for the input form buttons */
 .input-form button {
-  background-color: var(--primary-color);
-  color: var(--light-text);
+  background-color: transparent;
   border: none;
-  border-radius: 50%;
-  width: 44px;
-  height: 44px;
   margin-left: 10px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
   transition: background-color 0.3s ease;
+  color: var(--accent-color);
 }
 
 .input-form button:hover {
-  background-color: var(--secondary-color);
+  background-color: rgba(25, 118, 210, 0.1);
 }
 
+.input-form button:disabled {
+  color: var(--border-color);
+  cursor: not-allowed;
+}
+
+.input-form button[type="submit"] {
+  background-color: var(--accent-color);
+  color: white;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: all 0.3s ease;
+}
+
+.input-form button[type="submit"]:hover {
+  background-color: var(--accent-color);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.input-form button[type="submit"]:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.input-form button[type="submit"]:disabled {
+  background-color: var(--border-color);
+  color: var(--light-text);
+  transform: none;
+  box-shadow: none;
+}
+
+/* Mic button in input form */
+.input-form .mic-button {
+  background-color: var(--light-bg);
+  color: var(--accent-color);
+}
+
+.input-form .mic-button.active {
+  background-color: rgba(255, 99, 71, 0.2);
+  color: tomato;
+}
 .input-form button:disabled {
   background-color: var(--border-color);
   cursor: not-allowed;
@@ -487,5 +528,118 @@
   
   .login-prompt-content {
     padding: 30px 20px;
+  }
+}
+
+/* Enhanced Listen Button Styles */
+.listen-btn {
+  position: relative;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  margin-right: 10px;
+  cursor: pointer;
+  font-size: 1.5em;
+  background: transparent;
+  border: none;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.08);
+}
+
+.listen-btn:hover {
+  transform: translateY(-2px);
+  color: #1976d2;
+  background-color: rgba(25, 118, 210, 0.05);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.12);
+}
+
+.listen-btn:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 3px rgba(0, 0, 0, 0.1);
+}
+
+.listen-btn.playing {
+  color: #1976d2;
+  background-color: rgba(25, 118, 210, 0.08);
+  transform: scale(1.05);
+  box-shadow: 0 4px 10px rgba(25, 118, 210, 0.2);
+}
+
+.listen-btn::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  background: radial-gradient(circle, rgba(255,255,255,0.8) 0%, rgba(255,255,255,0) 70%);
+  opacity: 0;
+  top: 0;
+  left: 0;
+  transform: scale(0.5);
+  transition: all 0.3s ease;
+}
+
+.listen-btn:active::after {
+  opacity: 1;
+  transform: scale(2);
+  transition: 0s;
+}
+
+/* Listen button icon container */
+.listen-btn-icon {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Audio wave animation */
+.listen-btn-waves {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.listen-btn-waves span {
+  position: absolute;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  background: rgba(25, 118, 210, 0.2);
+  opacity: 0;
+  animation: wave 2s infinite ease-out;
+}
+
+.listen-btn-waves span:nth-child(2) {
+  animation-delay: 0.6s;
+}
+
+.listen-btn-waves span:nth-child(3) {
+  animation-delay: 1.2s;
+}
+
+@keyframes wave {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  30% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: scale(1.2);
+    opacity: 0;
   }
 }

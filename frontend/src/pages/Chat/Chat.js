@@ -10,7 +10,7 @@ const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [language, setLanguage] = useState('english'); // Default language
+  const [language, setLanguage] = useState('hindi'); // Default language set to Hindi
   const messagesEndRef = useRef(null);
   const { currentUser, incrementQuestionCount, questionCount, clearChatHistory } = useAuth();
   const location = useLocation();
@@ -142,51 +142,185 @@ const Chat = () => {
   }, [location.search, currentUser]);
 
   // Enhanced speech synthesis with play/pause and Hindi support + smoother controls
-  const handlePlayPause = (text, idx, lang) => {
-    if (playingIdx === idx && !isPaused) {
-      window.speechSynthesis.pause();
-      setIsPaused(true);
-    } else if (playingIdx === idx && isPaused) {
-      window.speechSynthesis.resume();
-      setIsPaused(false);
-    } else {
-      window.speechSynthesis.cancel();
-      const utterance = new window.SpeechSynthesisUtterance(text);
-      const allVoices = window.speechSynthesis.getVoices();
-      // Resolve preferred voice
-      let voiceToUse = allVoices.find(v => v.name === selectedVoice);
-      if (!voiceToUse) {
-        voiceToUse = allVoices.find(v => lang === 'hindi' ? v.lang === 'hi-IN' : v.lang.startsWith('en'));
-      }
-      if (voiceToUse) utterance.voice = voiceToUse;
-      utterance.lang = lang === 'hindi' ? 'hi-IN' : (voiceToUse?.lang || 'en-US');
-      // Apply smoother parameters
-      utterance.rate = Math.max(0.6, Math.min(1.4, ttsRate));
-      utterance.pitch = Math.max(0.5, Math.min(1.8, ttsPitch));
-      utterance.volume = 1;
-      utterance.onend = () => {
-        setPlayingIdx(null);
+  const speakMessage = (text, idx, lang) => {
+    // Force cancel any ongoing speech before starting a new one
+    window.speechSynthesis.cancel();
+    
+    if (playingIdx === idx) {
+      if (isPaused) {
+        window.speechSynthesis.resume();
         setIsPaused(false);
-      };
-      setPlayingIdx(idx);
-      setIsPaused(false);
-      window.speechSynthesis.speak(utterance);
+      } else {
+        window.speechSynthesis.pause();
+        setIsPaused(true);
+      }
+      return;
     }
-  };
-
-  const speakAssistant = (text) => {
-    // Speak without play/pause UI index
+    
+    // Create a new utterance
     const utterance = new window.SpeechSynthesisUtterance(text);
-    const allVoices = window.speechSynthesis.getVoices();
-    let voiceToUse = allVoices.find(v => v.name === selectedVoice);
-    if (!voiceToUse) {
-      voiceToUse = allVoices.find(v => language === 'hindi' ? v.lang === 'hi-IN' : v.lang.startsWith('en'));
+    
+    // Get all available voices
+    let allVoices = window.speechSynthesis.getVoices();
+    
+    // If voices array is empty, try to force load them
+    if (!allVoices || allVoices.length === 0) {
+      console.log("No voices available, trying to force load...");
+      // Force a refresh of voices
+      window.speechSynthesis.onvoiceschanged = () => {
+        allVoices = window.speechSynthesis.getVoices();
+        console.log("Voices loaded:", allVoices.length);
+      };
+      // Try to trigger voices load
+      speechSynthesis.cancel();
+      // Wait a moment and try again
+      setTimeout(() => {
+        allVoices = window.speechSynthesis.getVoices();
+      }, 200);
     }
-    if (voiceToUse) utterance.voice = voiceToUse;
-    utterance.lang = language === 'hindi' ? 'hi-IN' : (voiceToUse?.lang || 'en-US');
+    
+    console.log("Available voices:", allVoices.map(v => `${v.name} (${v.lang})`));
+    
+    // Try to find the best voice for the current language
+    let voiceToUse = null;
+    
+    // First try to use the user-selected voice if available
+    if (selectedVoice) {
+      voiceToUse = allVoices.find(v => v.name === selectedVoice);
+    }
+    
+    // If no voice is selected or the selected voice isn't available
+    if (!voiceToUse) {
+      if (lang === 'hindi') {
+        // For Hindi, try multiple matching strategies in order of preference
+        voiceToUse = allVoices.find(v => v.lang === 'hi-IN') || 
+                     allVoices.find(v => v.lang.startsWith('hi')) || 
+                     allVoices.find(v => v.name.toLowerCase().includes('hindi')) ||
+                     allVoices.find(v => v.name.toLowerCase().includes('indian'));
+        
+        // If still no Hindi voice, use any available voice
+        if (!voiceToUse && allVoices.length > 0) {
+          console.log('No Hindi voice found, using default voice');
+          voiceToUse = allVoices[0];
+        }
+      } else {
+        // For English, find an English voice
+        voiceToUse = allVoices.find(v => v.lang === 'en-US') || 
+                     allVoices.find(v => v.lang.startsWith('en')) || 
+                     (allVoices.length > 0 ? allVoices[0] : null);
+      }
+    }
+    
+    // Set the voice if one was found
+    if (voiceToUse) {
+      console.log(`Using voice: ${voiceToUse.name} (${voiceToUse.lang})`);
+      utterance.voice = voiceToUse;
+    } else {
+      console.warn("No suitable voice found");
+    }
+    
+    // Always set the language explicitly
+    utterance.lang = lang === 'hindi' ? 'hi-IN' : 'en-US';
+    
+    // Apply speech parameters
     utterance.rate = Math.max(0.6, Math.min(1.4, ttsRate));
     utterance.pitch = Math.max(0.5, Math.min(1.8, ttsPitch));
     utterance.volume = 1;
+    
+    // Handle speech end event
+    utterance.onend = () => {
+      setPlayingIdx(null);
+      setIsPaused(false);
+    };
+    
+    // Handle speech error event
+    utterance.onerror = (event) => {
+      console.error("Speech synthesis error:", event);
+      setPlayingIdx(null);
+      setIsPaused(false);
+    };
+    
+    // Update UI state
+    setPlayingIdx(idx);
+    setIsPaused(false);
+    
+    // Start speaking
+    window.speechSynthesis.speak(utterance);
+  };
+
+  const speakAssistant = (text) => {
+    // Force cancel any ongoing speech
+    window.speechSynthesis.cancel();
+    
+    // Create a new utterance
+    const utterance = new window.SpeechSynthesisUtterance(text);
+    
+    // Get all available voices
+    let allVoices = window.speechSynthesis.getVoices();
+    
+    // If voices array is empty, try to force load them
+    if (!allVoices || allVoices.length === 0) {
+      console.log("No voices available, trying to force load...");
+      // Force a refresh of voices
+      window.speechSynthesis.onvoiceschanged = () => {
+        allVoices = window.speechSynthesis.getVoices();
+        console.log("Voices loaded:", allVoices.length);
+      };
+      // Try to trigger voices load
+      speechSynthesis.cancel();
+      // Wait a moment and try again
+      setTimeout(() => {
+        allVoices = window.speechSynthesis.getVoices();
+      }, 200);
+    }
+    
+    // Try to find the best voice for the current language
+    let voiceToUse = null;
+    
+    // First try to use the user-selected voice if available
+    if (selectedVoice) {
+      voiceToUse = allVoices.find(v => v.name === selectedVoice);
+    }
+    
+    // If no voice is selected or the selected voice isn't available
+    if (!voiceToUse) {
+      if (language === 'hindi') {
+        // For Hindi, try multiple matching strategies in order of preference
+        voiceToUse = allVoices.find(v => v.lang === 'hi-IN') || 
+                     allVoices.find(v => v.lang.startsWith('hi')) || 
+                     allVoices.find(v => v.name.toLowerCase().includes('hindi')) ||
+                     allVoices.find(v => v.name.toLowerCase().includes('indian'));
+        
+        // If still no Hindi voice, use any available voice
+        if (!voiceToUse && allVoices.length > 0) {
+          console.log('No Hindi voice found, using default voice');
+          voiceToUse = allVoices[0];
+        }
+      } else {
+        // For English, find an English voice
+        voiceToUse = allVoices.find(v => v.lang === 'en-US') || 
+                     allVoices.find(v => v.lang.startsWith('en')) || 
+                     (allVoices.length > 0 ? allVoices[0] : null);
+      }
+    }
+    
+    // Set the voice if one was found
+    if (voiceToUse) {
+      console.log(`Using voice: ${voiceToUse.name} (${voiceToUse.lang})`);
+      utterance.voice = voiceToUse;
+    } else {
+      console.warn("No suitable voice found");
+    }
+    
+    // Always set the language explicitly
+    utterance.lang = language === 'hindi' ? 'hi-IN' : 'en-US';
+    
+    // Apply speech parameters
+    utterance.rate = Math.max(0.6, Math.min(1.4, ttsRate));
+    utterance.pitch = Math.max(0.5, Math.min(1.8, ttsPitch));
+    utterance.volume = 1;
+    
+    // Start speaking
     window.speechSynthesis.speak(utterance);
   };
 
@@ -212,7 +346,8 @@ const Chat = () => {
             setInput(transcript);
           }
         }
-        if (finalText.trim()) setInput(prev => (prev ? (prev + ' ' + finalText).trim() : finalText.trim()));
+        // Fix for duplicate text - set input directly instead of appending
+        if (finalText.trim()) setInput(finalText.trim());
       };
       recog.onerror = () => setIsListening(false);
       recog.onend = () => setIsListening(false);
@@ -338,15 +473,7 @@ const Chat = () => {
           >
             <FaCog />
           </button>
-          {/* Microphone input */}
-          <button
-            className={`mic-button ${isListening ? 'active' : ''}`}
-            onClick={toggleListening}
-            title={isListening ? 'Stop voice input' : 'Start voice input'}
-            type="button"
-          >
-            {isListening ? <FaMicrophoneSlash /> : <FaMicrophone />}
-          </button>
+          {/* Removed microphone from header */}
           <button
             className="language-toggle"
             onClick={toggleLanguage}
@@ -384,7 +511,7 @@ const Chat = () => {
                     {/* Play button for assistant messages */}
                     {!isUser && (
                       <button
-                        className="listen-btn"
+                        className={`listen-btn ${playingIdx === idx ? 'playing' : ''}`}
                         title={
                           playingIdx === idx
                             ? isPaused
@@ -392,26 +519,22 @@ const Chat = () => {
                               : 'Pause'
                             : 'Play'
                         }
-                        onClick={() => handlePlayPause(msg.content, idx, language)}
-                        style={{
-                          marginRight: '10px',
-                          cursor: 'pointer',
-                          fontSize: '1.5em',
-                          background: playingIdx === idx ? '#e0f7fa' : '#f0f0f0',
-                          border: 'none',
-                          borderRadius: '50%',
-                          width: '40px',
-                          height: '40px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
-                        }}
+                        onClick={() => speakMessage(msg.content, idx, language)}
+                        aria-label={playingIdx === idx ? (isPaused ? 'Resume' : 'Pause') : 'Play'}
                       >
-                        {playingIdx === idx ? (
-                          isPaused ? <FaPlay /> : <FaPause />
-                        ) : (
-                          <FaPlay />
+                        <div className="listen-btn-icon">
+                          {playingIdx === idx ? (
+                            isPaused ? <FaPlay /> : <FaPause />
+                          ) : (
+                            <FaPlay />
+                          )}
+                        </div>
+                        {playingIdx === idx && !isPaused && (
+                          <div className="listen-btn-waves">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                          </div>
                         )}
                       </button>
                     )}
@@ -487,6 +610,15 @@ const Chat = () => {
           placeholder="Ask a question about the Bhagavad Gita..."
           disabled={isLoading || isHistoryView}
         />
+        {/* Microphone input moved next to input box */}
+        <button
+          className={`mic-button ${isListening ? 'active' : ''}`}
+          onClick={toggleListening}
+          title={isListening ? 'Stop voice input' : 'Start voice input'}
+          type="button"
+        >
+          {isListening ? <FaMicrophoneSlash /> : <FaMicrophone />}
+        </button>
         <button type="submit" disabled={isLoading || !input.trim() || isHistoryView}>
           <FaPaperPlane />
         </button>

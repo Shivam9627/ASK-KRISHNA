@@ -173,17 +173,23 @@ def chat():
         if embed_model is None or llm is None or qdrant_client is None:
             init_models()
 
+        # Always modify the prompt based on the selected language, regardless of input language
         if language == 'hindi':
-            modified_prompt = f"कृपया हिंदी में उत्तर दें: {prompt}"
+            # Add instruction to respond in Hindi regardless of input language
+            modified_prompt = f"कृपया इस प्रश्न का उत्तर हिंदी में दें, भले ही प्रश्न किसी भी भाषा में हो: {prompt}"
         else:
-            modified_prompt = prompt
+            # For English, ensure response is in English
+            modified_prompt = f"Please answer this question in English, regardless of the language it's asked in: {prompt}"
 
         full_response = pipeline(modified_prompt, embed_model, llm, qdrant_client)
         thinking, answer = extract_thinking_and_answer(full_response.text)
 
         if language == 'hindi':
             import re
-            hindi_blocks = re.findall(r'([\u0900-\u097F0-9\s\n\r\t\-•\.,:;!?()\[\]"“"'']+)', answer)
+            # Clean up the answer by removing unwanted symbols like square brackets
+            answer = re.sub(r'[\[\]]', '', answer)
+            # Extract the longest Hindi text block
+            hindi_blocks = re.findall(r'([ऀ-ॿ0-9\s\n\r\t\-•\.,;:!?()"""'']+)', answer)
             if hindi_blocks:
                 answer = max(hindi_blocks, key=len).strip()
             answer = re.sub(r'\n{3,}', '\n\n', answer).strip()
