@@ -1,5 +1,4 @@
-# Backend requirements for Python 3.11.9
-
+# Backend (Flask API)
 Flask==3.0.2
 flask-cors==4.0.0
 gunicorn==21.2.0
@@ -24,4 +23,16 @@ pandas==2.1.4
 requests==2.32.3
 tqdm==4.66.4
 
+# Streamlit frontend
 streamlit==1.32.0
+
+# LlamaIndex (rebranded to "llama-index")
+llama-index==0.10.35
+llama-index-core==0.10.35
+llama-index-llms-openai==0.1.19
+llama-index-embeddings-openai==0.1.11
+llama-index-vector-stores-qdrant==0.1.6
+
+# Other helpful packages Streamlit often needs
+altair==5.2.0
+pyarrow==15.0.0
