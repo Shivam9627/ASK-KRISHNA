@@ -781,5 +781,6 @@ def list_users():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
-if __name__ == '__main__':
-    app.run(port=5000)  # Do NOT use debug=True on Windows!
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))  # Render sets $PORT automatically
+    app.run(host="0.0.0.0", port=port)
