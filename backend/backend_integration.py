@@ -44,6 +44,23 @@ except Exception as e:
 app = Flask(__name__)
 CORS(app)
 
+# --- Add this after app = Flask(__name__) and CORS(app) ---
+
+@app.route("/", methods=["GET"])
+def home():
+    return jsonify({
+        "message": "ASK-KRISHNA backend is live 🚀",
+        "status": "ok"
+    }), 200
+
+@app.route("/ping", methods=["GET"])
+def ping():
+    return jsonify({
+        "message": "pong",
+        "status": "healthy"
+    }), 200
+
+
 # Path to the Streamlit app
 STREAMLIT_APP_PATH = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'app.py')
 
