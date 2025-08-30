@@ -39,5 +39,8 @@
       "last 1 safari version"
     ]
   },
-  "proxy": "http://localhost:8501"
+  "proxy": "http://localhost:8501",
+  "devDependencies": {
+    "fork-ts-checker-webpack-plugin": "^9.1.0"
+  }
 }
