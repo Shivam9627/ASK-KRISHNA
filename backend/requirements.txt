@@ -1,4 +1,4 @@
-# Backend (Flask API)
+# Backend
 Flask==3.0.2
 flask-cors==4.0.0
 gunicorn==21.2.0
@@ -7,11 +7,10 @@ gunicorn==21.2.0
 pymongo==4.6.1
 python-dotenv==1.0.1
 
-# Vector DB + embeddings
+# Vector DB
 qdrant-client==1.9.0
-fastembed==0.7.2
 
-# OpenAI + LangChain (stable with 3.11)
+# OpenAI + LangChain
 openai==1.30.1
 langchain==0.2.1
 langchain-community==0.2.1
@@ -23,10 +22,10 @@ pandas==2.1.4
 requests==2.32.3
 tqdm==4.66.4
 
-# Streamlit frontend
+# Frontend
 streamlit==1.32.0
 
-# LlamaIndex (rebranded to "llama-index")
+# LlamaIndex
 llama-index==0.10.35
 llama-index-core==0.10.35
 llama-index-llms-openai==0.1.19
@@ -34,6 +33,5 @@ llama-index-embeddings-openai==0.1.11
 llama-index-embeddings-fastembed==0.1.3
 llama-index-vector-stores-qdrant==0.1.6
 
-# Other helpful packages Streamlit often needs
-altair==5.2.0
-pyarrow==15.0.0
+# FastEmbed (aligned with LlamaIndex plugin)
+fastembed==0.1.4
