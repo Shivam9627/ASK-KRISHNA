@@ -2,11 +2,11 @@ import axios from 'axios';
 
 // Create an axios instance with default config
 const api = axios.create({
-  baseURL: process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000',
-  headers: {
-    'Content-Type': 'application/json',
-  },
+  baseURL: process.env.REACT_APP_BACKEND_URL || 
+           (process.env.NODE_ENV === 'production' ? '' : 'http://localhost:5000'),
+  headers: { 'Content-Type': 'application/json' },
 });
+
 
 // Add a request interceptor to include auth token if available
 api.interceptors.request.use(
