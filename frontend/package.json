@@ -21,9 +21,10 @@
   },
   "scripts": {
   "start": "react-scripts start",
-  "build": "CI=false npx react-scripts build",
+  "build": "CI=false node node_modules/react-scripts/bin/react-scripts.js build",
   "test": "react-scripts test",
-  "eject": "react-scripts eject"
+  "eject": "react-scripts eject",
+  "postinstall": "chmod +x node_modules/.bin/* || true"
 },
   "eslintConfig": {
     "extends": [
