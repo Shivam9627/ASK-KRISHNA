@@ -3,30 +3,31 @@
   "version": "0.1.0",
   "private": true,
   "engines": {
-    "node": "20.x",
-    "npm": "10.x"
+    "node": ">=18",
+    "npm": ">=9"
   },
   "dependencies": {
     "@testing-library/jest-dom": "^5.17.0",
     "@testing-library/react": "^13.4.0",
     "@testing-library/user-event": "^13.5.0",
     "axios": "^1.6.2",
+    "cross-spawn": "7.0.3",
+    "fs-extra": "^11.3.1",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-icons": "^4.12.0",
     "react-markdown": "^9.0.1",
     "react-router-dom": "^6.20.0",
     "react-scripts": "5.0.1",
-    "web-vitals": "^2.1.4",
-    "cross-spawn": "7.0.3"
+    "web-vitals": "^2.1.4"
   },
   "scripts": {
-  "start": "react-scripts start",
-  "build": "CI=false node node_modules/react-scripts/bin/react-scripts.js build",
-  "test": "react-scripts test",
-  "eject": "react-scripts eject",
-  "postinstall": "chmod +x node_modules/.bin/* || true"
-},
+    "start": "react-scripts start",
+    "build": "CI=false node node_modules/react-scripts/bin/react-scripts.js build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject",
+    "postinstall": "chmod +x node_modules/.bin/* || true"
+  },
   "eslintConfig": {
     "extends": [
       "react-app",
