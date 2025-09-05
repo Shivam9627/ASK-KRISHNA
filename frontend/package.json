@@ -28,11 +28,18 @@
     "eject": "react-scripts eject",
     "postinstall": "chmod +x node_modules/.bin/* || true"
   },
+  "proxy": "http://127.0.0.1:5000",
   "eslintConfig": {
     "extends": [
       "react-app",
       "react-app/jest"
     ]
+  },
+  "reactRouter": {
+    "future": {
+      "v7_startTransition": true,
+      "v7_relativeSplatPath": true
+    }
   },
   "browserslist": {
     "production": [

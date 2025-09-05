@@ -51,38 +51,125 @@ message_templates = [
 
 def search(query, client, embed_model, k=5):
     collection_name = "bhagavad-gita"
-    query_embedding = embed_model.get_query_embedding(query)
-    result = client.query_points(
-        collection_name=collection_name,
-        query=query_embedding,
-        limit=k
-    )
-    return result
+    
+    # Add retry mechanism for embedding generation
+    max_retries = 3
+    retry_delay = 2  # seconds
+    
+    # Try to get query embedding with retries
+    for attempt in range(max_retries):
+        try:
+            query_embedding = embed_model.get_query_embedding(query)
+            break
+        except Exception as e:
+            print(f"Error generating embedding (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(retry_delay)
+            else:
+                print("Failed to generate embedding after all retries")
+                # Return empty result
+                from qdrant_client import models
+                return models.QueryResponse(points=[])
+    
+    # Try to query Qdrant with retries
+    for attempt in range(max_retries):
+        try:
+            result = client.query_points(
+                collection_name=collection_name,
+                query=query_embedding,
+                limit=k
+            )
+            return result
+        except Exception as e:
+            print(f"Error querying vector database (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(retry_delay)
+            else:
+                print("Failed to query vector database after all retries")
+                # Return empty result
+                from qdrant_client import models
+                return models.QueryResponse(points=[])
 
 def pipeline(query, embed_model, llm, client):
+    # Detect if query is in Hindi
+    import re
+    has_hindi = bool(re.search(r'[ऀ-ॿ]', query))
+    
     # R - Retriever
-    relevant_documents = search(query, client, embed_model)
-    context = [doc.payload['context'] for doc in relevant_documents.points]
-    context = "\n".join(context)
+    try:
+        relevant_documents = search(query, client, embed_model)
+        if relevant_documents and hasattr(relevant_documents, 'points') and len(relevant_documents.points) > 0:
+            context = [doc.payload['context'] for doc in relevant_documents.points]
+            context = "\n".join(context)
+        else:
+            # Handle case where no relevant documents are found
+            context = "No specific context found in the Bhagavad Gita. Providing a general answer based on Krishna's teachings."
+    except Exception as e:
+        print(f"Error in retrieval: {e}")
+        # Fallback context if retrieval fails
+        context = "Unable to retrieve specific context. Providing a general answer based on Krishna's teachings."
 
     # A - Augment
     chat_template = ChatPromptTemplate(message_templates=message_templates)
-
-    # G - Generate
-    response = llm.complete(
-        chat_template.format(
-            context_str=context,
-            query=query)
+    
+    # Modify template based on language
+    formatted_template = chat_template.format(
+        context_str=context,
+        query=query
     )
-    return response
+    
+    # If query has Hindi characters, add instruction to respond in Hindi
+    if has_hindi:
+        formatted_template += "\n\nकृपया इस प्रश्न का उत्तर हिंदी में दें।"
+
+    # G - Generate with retry mechanism
+    max_retries = 3
+    retry_delay = 2  # seconds
+    
+    for attempt in range(max_retries):
+        try:
+            response = llm.complete(formatted_template)
+            return response
+        except Exception as e:
+            print(f"LLM generation error (attempt {attempt+1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                import time
+                time.sleep(retry_delay)
+            else:
+                # Return a fallback response if all retries fail
+                return "I apologize, but I'm having trouble generating a response right now. Please try again later."
+
 
 def extract_thinking_and_answer(response_text):
     """Extract thinking process and final answer from response"""
     try:
+        # Handle both string and object responses
+        if not isinstance(response_text, str):
+            # If it's an object with a text attribute, use that
+            if hasattr(response_text, 'text'):
+                response_text = response_text.text
+            else:
+                # Otherwise convert to string
+                response_text = str(response_text)
+                
         thinking = response_text[response_text.find("<think>") + 7:response_text.find("</think>")].strip()
         answer = response_text[response_text.find("</think>") + 8:].strip()
+        
+        # Clean up Hindi text by removing unwanted symbols
+        import re
+        answer = re.sub(r'[\[\]]', '', answer)
+        
+        # Improve formatting for both Hindi and English text
+        answer = re.sub(r'\n{3,}', '\n\n', answer).strip()
+        
         return thinking, answer
-    except:
+    except Exception as e:
+        print(f"Error extracting thinking and answer: {e}")
+        # Return original response as fallback
+        if hasattr(response_text, 'text'):
+            return "", response_text.text
         return "", response_text
 
 def main():

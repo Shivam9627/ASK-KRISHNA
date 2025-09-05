@@ -191,9 +191,25 @@ def chat():
             init_models()
 
         # Always modify the prompt based on the selected language, regardless of input language
+        # Detect if query already has Hindi characters
+        import re
+        has_hindi = bool(re.search(r'[ऀ-ॿ]', prompt))
+        
         if language == 'hindi':
             # Add instruction to respond in Hindi regardless of input language
-            modified_prompt = f"कृपया इस प्रश्न का उत्तर हिंदी में दें, भले ही प्रश्न किसी भी भाषा में हो: {prompt}"
+            # Use more comprehensive instruction for better Hindi responses
+            modified_prompt = f"कृपया इस प्रश्न का उत्तर हिंदी में दें, भले ही प्रश्न किसी भी भाषा में हो। कृपया शुद्ध हिंदी का प्रयोग करें और उत्तर को स्पष्ट रूप से लिखें। पूर्ण वाक्यों में उत्तर दें: {prompt}"
+            
+            # If query is already in Hindi, add additional context
+            if has_hindi:
+                # Extract the longest Hindi text block for better processing
+                hindi_blocks = re.findall(r'[ऀ-ॿ\s\.,;:!?()]+', prompt)
+                if hindi_blocks:
+                    longest_hindi_block = max(hindi_blocks, key=len)
+                    if len(longest_hindi_block) > len(prompt) / 3:  # If at least 1/3 is Hindi
+                        modified_prompt = f"निम्नलिखित हिंदी प्रश्न का उत्तर हिंदी में ही दें। कृपया शुद्ध हिंदी का प्रयोग करें और उत्तर को स्पष्ट रूप से लिखें। पूर्ण वाक्यों में उत्तर दें: {longest_hindi_block}"
+                    else:
+                        modified_prompt = f"निम्नलिखित हिंदी प्रश्न का उत्तर हिंदी में ही दें। कृपया शुद्ध हिंदी का प्रयोग करें और उत्तर को स्पष्ट रूप से लिखें। पूर्ण वाक्यों में उत्तर दें: {prompt}"
         else:
             # For English, ensure response is in English
             modified_prompt = f"Please answer this question in English, regardless of the language it's asked in: {prompt}"
@@ -205,11 +221,35 @@ def chat():
             import re
             # Clean up the answer by removing unwanted symbols like square brackets
             answer = re.sub(r'[\[\]]', '', answer)
-            # Extract the longest Hindi text block
-            hindi_blocks = re.findall(r'([ऀ-ॿ0-9\s\n\r\t\-•\.,;:!?()"""'']+)', answer)
+            
+            # Extract Hindi text blocks with improved pattern to capture more punctuation and formatting
+            hindi_blocks = re.findall(r'([ऀ-ॿ0-9\s\n\r\t\-•\.,;:!?()"""''\u0020-\u0040\u005B-\u0060\u007B-\u007E]+)', answer)
+            
             if hindi_blocks:
+                # Use the longest Hindi block as the answer
                 answer = max(hindi_blocks, key=len).strip()
+                
+                # If the extracted Hindi block is too short (less than 20 chars), use the full answer
+                # This handles cases where Hindi text might be mixed with English or other characters
+                if len(answer) < 20 and len(answer) < len(answer) * 0.3:  # Less than 30% of original
+                    # Fallback to original answer with basic cleanup
+                    answer = re.sub(r'[\[\]]', '', answer).strip()
+            
+            # Improve formatting
             answer = re.sub(r'\n{3,}', '\n\n', answer).strip()
+            
+            # Remove any English instructions that might be at the beginning
+            answer = re.sub(r'^(Here is|The answer|Answer|Response|In Hindi|Hindi translation)[:\s]*', '', answer, flags=re.IGNORECASE)
+            
+            # Check if the answer is just commas or very short
+            if answer.strip() in [',', ',,', ',,,'] or len(answer.strip()) < 5:
+                # Provide a fallback response in Hindi
+                answer = "क्षमा करें, मुझे आपके प्रश्न का उत्तर देने में समस्या हो रही है। कृपया अपना प्रश्न दोबारा पूछें।"
+            
+            # Reduce multiple commas to a single comma
+            answer = re.sub(r',{2,}', ',', answer)
+            
+            # Clear thinking section for Hindi responses to keep output clean
             thinking = ''
 
         if user_id:

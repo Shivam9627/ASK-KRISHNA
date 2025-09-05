@@ -2,7 +2,11 @@ import axios from 'axios';
 
 // Create an axios instance with default config
 const api = axios.create({
-  baseURL: process.env.REACT_APP_BACKEND_URL,
+  // Use baseURL from environment variable only when it exists and we're not in development
+  // This allows the app to use the proxy in development and the actual URL in production
+  ...(process.env.NODE_ENV !== 'development' && process.env.REACT_APP_BACKEND_URL 
+      ? { baseURL: process.env.REACT_APP_BACKEND_URL } 
+      : {}),
   headers: { 'Content-Type': 'application/json' },
 });
 
@@ -44,11 +48,10 @@ api.interceptors.request.use(
           const repaired = { ...userData, token: validToken };
           localStorage.setItem('user', JSON.stringify(repaired));
         }
-        if (validToken) {
-          config.headers.Authorization = `Bearer ${validToken}`;
-        }
-        // Always include X-User-Id as fallback for backend
+        // Only send the user_id in the Authorization header instead of the full token
+        // This prevents the 431 Request Header Fields Too Large error
         if (userData && userData.user_id) {
+          config.headers.Authorization = `Bearer ${userData.user_id}`;
           config.headers['X-User-Id'] = userData.user_id;
         }
       } catch (e) {
