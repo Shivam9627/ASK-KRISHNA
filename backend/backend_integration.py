@@ -61,17 +61,27 @@ embed_model, llm, qdrant_client = None, None, None
 
 def initialize_models():
     try:
+        print("🔍 Initializing embedding model...")
         embed_model = FastEmbedEmbedding(model_name="thenlper/gte-large")
+        print("✅ Embedding model initialized")
+        
+        print("🔍 Initializing Groq LLM...")
         llm = Groq(model="deepseek-r1-distill-llama-70b")
+        print("✅ Groq LLM initialized")
+        
+        print("🔍 Initializing Qdrant client...")
         client = qdrant_client.QdrantClient(
             url=os.getenv("QDRANT_URL"),
             api_key=os.getenv("QDRANT_API_KEY"),
             prefer_grpc=True
         )
-        print("✅ Models initialized successfully")
+        print("✅ Qdrant client initialized")
+        
         return embed_model, llm, client
     except Exception as e:
         print(f"❌ Failed to initialize models: {e}")
+        import traceback
+        print(traceback.format_exc())
         raise e
 
 # Email configuration
@@ -92,11 +102,16 @@ def send_email(recipient_email: str, subject: str, body_text: str) -> None:
     message["Subject"] = subject
     message.attach(MIMEText(body_text, "plain", "utf-8"))
 
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
-        if SMTP_USE_TLS:
-            server.starttls()
-        server.login(SMTP_USERNAME, SMTP_PASSWORD)
-        server.sendmail(EMAIL_FROM, [recipient_email], message.as_string())
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+            if SMTP_USE_TLS:
+                server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.sendmail(EMAIL_FROM, [recipient_email], message.as_string())
+            print(f"📧 Email sent to {recipient_email}")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
+        raise e
 
 def get_user_id_from_request():
     auth_header = request.headers.get('Authorization')
@@ -162,7 +177,6 @@ def get_user_id_from_request():
     print("❌ Unable to extract user_id from Authorization token")
     return None
 
-# Search function (moved from utils.py)
 def search(query, client, embed_model, k=5):
     collection_name = "bhagavad-gita"
     
@@ -171,35 +185,36 @@ def search(query, client, embed_model, k=5):
     
     for attempt in range(max_retries):
         try:
+            print(f"🔍 Generating embedding for query: {query}")
             query_embedding = embed_model.get_query_embedding(query)
+            print("✅ Embedding generated")
             break
         except Exception as e:
-            print(f"Error generating embedding (attempt {attempt+1}/{max_retries}): {e}")
+            print(f"❌ Error generating embedding (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
-                import time
                 time.sleep(retry_delay)
             else:
-                print("Failed to generate embedding after all retries")
+                print("❌ Failed to generate embedding after all retries")
                 return models.QueryResponse(points=[])
     
     for attempt in range(max_retries):
         try:
+            print("🔍 Querying Qdrant vector database...")
             result = client.query_points(
                 collection_name=collection_name,
                 query=query_embedding,
                 limit=k
             )
+            print(f"✅ Qdrant query returned {len(result.points)} results")
             return result
         except Exception as e:
-            print(f"Error querying vector database (attempt {attempt+1}/{max_retries}): {e}")
+            print(f"❌ Error querying vector database (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
-                import time
                 time.sleep(retry_delay)
             else:
-                print("Failed to query vector database after all retries")
+                print("❌ Failed to query vector database after all retries")
                 return models.QueryResponse(points=[])
 
-# Pipeline function (moved from utils.py)
 message_templates = [
     ChatMessage(
         content="""
@@ -231,14 +246,17 @@ def pipeline(query, embed_model, llm, client):
     has_hindi = bool(re.search(r'[ऀ-ॿ]', query))
     
     try:
+        print("🔍 Starting pipeline for query:", query)
         relevant_documents = search(query, client, embed_model)
         if relevant_documents and hasattr(relevant_documents, 'points') and len(relevant_documents.points) > 0:
             context = [doc.payload['context'] for doc in relevant_documents.points]
             context = "\n".join(context)
+            print("✅ Retrieved context from Qdrant")
         else:
             context = "No specific context found in the Bhagavad Gita. Providing a general answer based on Krishna's teachings."
+            print("⚠️ No relevant context found")
     except Exception as e:
-        print(f"Error in retrieval: {e}")
+        print(f"❌ Error in retrieval: {e}")
         context = "Unable to retrieve specific context. Providing a general answer based on Krishna's teachings."
 
     chat_template = ChatPromptTemplate(message_templates=message_templates)
@@ -256,17 +274,18 @@ def pipeline(query, embed_model, llm, client):
     
     for attempt in range(max_retries):
         try:
+            print("🔍 Generating response with LLM...")
             response = llm.complete(formatted_template)
+            print("✅ LLM response generated")
             return response
         except Exception as e:
-            print(f"LLM generation error (attempt {attempt+1}/{max_retries}): {e}")
+            print(f"❌ LLM generation error (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
-                import time
                 time.sleep(retry_delay)
             else:
+                print("❌ Failed to generate LLM response after all retries")
                 return "I apologize, but I'm having trouble generating a response right now. Please try again later."
 
-# Extract thinking and answer function (moved from utils.py)
 def extract_thinking_and_answer(response_text):
     try:
         if not isinstance(response_text, str):
@@ -281,9 +300,10 @@ def extract_thinking_and_answer(response_text):
         answer = re.sub(r'[\[\]]', '', answer)
         answer = re.sub(r'\n{3,}', '\n\n', answer).strip()
         
+        print("✅ Extracted thinking and answer")
         return thinking, answer
     except Exception as e:
-        print(f"Error extracting thinking and answer: {e}")
+        print(f"❌ Error extracting thinking and answer: {e}")
         if hasattr(response_text, 'text'):
             return "", response_text.text
         return "", response_text
@@ -316,13 +336,17 @@ def chat():
         return jsonify({'error': 'Authentication Error: You do not have permission to access this resource. Please check your credentials.'}), 401
 
     if not prompt:
+        print("❌ No prompt provided")
         return jsonify({'error': 'No prompt provided'}), 400
 
     try:
         if embed_model is None or llm is None or qdrant_client is None:
+            print("🔍 Initializing models...")
             embed_model, llm, qdrant_client = initialize_models()
+            print("✅ Models initialized")
 
         has_hindi = bool(re.search(r'[ऀ-ॿ]', prompt))
+        print(f"🔍 Prompt language detection: {'Hindi' if has_hindi else 'Non-Hindi'}")
         
         if language == 'hindi':
             modified_prompt = f"कृपया इस प्रश्न का उत्तर हिंदी में दें, भले ही प्रश्न किसी भी भाषा में हो। कृपया शुद्ध हिंदी का प्रयोग करें और उत्तर को स्पष्ट रूप से लिखें। पूर्ण वाक्यों में उत्तर दें: {prompt}"
@@ -336,8 +360,11 @@ def chat():
                         modified_prompt = f"निम्नलिखित हिंदी प्रश्न का उत्तर हिंदी में ही दें। कृपया शुद्ध हिंदी का प्रयोग करें और उत्तर को स्पष्ट रूप से लिखें। पूर्ण वाक्यों में उत्तर दें: {prompt}"
         else:
             modified_prompt = f"Please answer this question in English, regardless of the language it's asked in: {prompt}"
+        print(f"🔍 Modified prompt: {modified_prompt[:100]}...")
 
+        print("🔍 Running pipeline...")
         full_response = pipeline(modified_prompt, embed_model, llm, qdrant_client)
+        print("✅ Pipeline complete")
         thinking, answer = extract_thinking_and_answer(full_response)
 
         if language == 'hindi':
@@ -345,7 +372,7 @@ def chat():
             hindi_blocks = re.findall(r'([ऀ-ॿ0-9\s\n\r\t\-•\.,;:!?()"""''\u0020-\u0040\u005B-\u0060\u007B-\u007E]+)', answer)
             if hindi_blocks:
                 answer = max(hindi_blocks, key=len).strip()
-                if len(answer) < 20 and len(answer) < len(full_response) * 0.3:
+                if len(answer) < 20 and len(answer) < len(str(full_response)) * 0.3:
                     answer = re.sub(r'[\[\]]', '', answer).strip()
             answer = re.sub(r'\n{3,}', '\n\n', answer).strip()
             answer = re.sub(r'^(Here is|The answer|Answer|Response|In Hindi|Hindi translation)[:\s]*', '', answer, flags=re.IGNORECASE)
@@ -353,6 +380,7 @@ def chat():
                 answer = "क्षमा करें, मुझे आपके प्रश्न का उत्तर देने में समस्या हो रही है। कृपया अपना प्रश्न दोबारा पूछें।"
             answer = re.sub(r',{2,}', ',', answer)
             thinking = ''
+            print("✅ Hindi response processed")
 
         if user_id:
             chat_id = str(ObjectId())
@@ -372,10 +400,13 @@ def chat():
         else:
             print("ℹ️ No user_id in request; responding without saving history")
 
+        print(f"✅ Sending response: {answer[:100]}...")
         return jsonify({'response': answer, 'thinking': thinking})
 
     except Exception as e:
-        print(f"Error in /api/chat: {e}")
+        print(f"❌ Error in /api/chat: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/history', methods=['GET'])
@@ -409,12 +440,15 @@ def get_history():
         return jsonify(chats)
     except Exception as e:
         print(f"❌ Error fetching history: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify([])
 
 @app.route('/api/history/<chat_id>', methods=['GET'])
 def get_single_chat(chat_id):
     user_id = get_user_id_from_request()
     if not user_id:
+        print("❌ Unauthorized: No user_id")
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
@@ -425,23 +459,29 @@ def get_single_chat(chat_id):
             pass
         chat = chat_history_collection.find_one(query)
         if not chat:
+            print(f"⚠️ Chat {chat_id} not found for user {user_id}")
             return jsonify({'error': 'Not found'}), 404
         chat['_id'] = str(chat['_id'])
+        print(f"✅ Retrieved chat {chat_id} for user {user_id}")
         return jsonify(chat)
     except Exception as e:
         print(f"❌ Error fetching single chat: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/history/<chat_id>', methods=['DELETE'])
 def delete_chat(chat_id):
     user_id = get_user_id_from_request()
     if not user_id:
+        print("❌ Unauthorized: No user_id")
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
         try:
             oid = ObjectId(chat_id)
         except Exception:
+            print(f"❌ Invalid chat id: {chat_id}")
             return jsonify({'error': 'Invalid chat id'}), 400
 
         query = {'_id': oid, '$or': [{'user_id': user_id}]}
@@ -457,12 +497,15 @@ def delete_chat(chat_id):
         return jsonify({'success': True})
     except Exception as e:
         print(f"❌ Error deleting chat: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/history', methods=['DELETE'])
 def delete_all_history():
     user_id = get_user_id_from_request()
     if not user_id:
+        print("❌ Unauthorized: No user_id")
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
@@ -476,6 +519,8 @@ def delete_all_history():
         return jsonify({'success': True, 'deleted': result.deleted_count})
     except Exception as e:
         print(f"❌ Error deleting all history: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/auth/register', methods=['POST'])
@@ -486,9 +531,11 @@ def register():
     password = data.get('password')
     
     if not username or not email or not password:
+        print("❌ Missing username, email, or password")
         return jsonify({'error': 'Username, email and password required'}), 400
     
     if users_collection.find_one({'$or': [{'username': username}, {'email': email}]}):
+        print(f"❌ Username {username} or email {email} already exists")
         return jsonify({'error': 'Username or email already exists'}), 400
     
     otp_collection = db['otp_codes']
@@ -499,6 +546,7 @@ def register():
     })
     
     if not verified_email:
+        print(f"❌ Email {email} not verified")
         return jsonify({'error': 'Email not verified. Please verify your email with OTP first.'}), 400
     
     user_data = {
@@ -521,6 +569,7 @@ def register():
         'profileImage': None
     }
     
+    print(f"✅ User registered: {username}")
     return jsonify({
         'success': True,
         'user_id': str(result.inserted_id),
@@ -538,7 +587,6 @@ def login():
     password = data.get('password')
     
     print(f"🔍 Login attempt - Email: {email}")
-    print(f"📝 Request data: {data}")
     
     if not email or not password:
         print("❌ Missing email or password")
@@ -546,17 +594,11 @@ def login():
     
     user = users_collection.find_one({'email': email, 'password': password})
     
-    print(f"🔍 User found: {user is not None}")
-    if user:
-        print(f"✅ User details: {user}")
-    
     if not user:
         print(f"❌ Login failed for email: {email}")
         user_exists = users_collection.find_one({'email': email})
         if user_exists:
-            print(f"⚠️ User exists but password is wrong")
-            print(f"⚠️ Stored password: {user_exists.get('password')}")
-            print(f"⚠️ Provided password: {password}")
+            print("⚠️ User exists but password is wrong")
         else:
             print(f"⚠️ User with email {email} does not exist")
         return jsonify({'error': 'Invalid credentials'}), 401
@@ -583,17 +625,20 @@ def login():
 
 @app.route('/api/auth/logout', methods=['POST'])
 def logout():
+    print("✅ User logged out")
     return jsonify({'success': True})
 
 @app.route('/api/auth/profile', methods=['GET'])
 def get_profile():
     user_id = get_user_id_from_request()
     if not user_id:
+        print("❌ Unauthorized: No user_id")
         return jsonify({'error': 'Unauthorized'}), 401
 
     try:
         user = users_collection.find_one({'_id': ObjectId(user_id)})
         if not user:
+            print(f"❌ User not found: {user_id}")
             return jsonify({'error': 'User not found'}), 404
 
         user_response = {
@@ -603,15 +648,19 @@ def get_profile():
             'created_at': user.get('created_at'),
             'profileImage': user.get('profileImage')
         }
+        print(f"✅ Profile retrieved for user: {user_id}")
         return jsonify(user_response)
     except Exception as e:
         print(f"❌ Error fetching profile: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/auth/profile', methods=['PUT'])
 def update_profile():
     user_id = get_user_id_from_request()
     if not user_id:
+        print("❌ Unauthorized: No user_id")
         return jsonify({'error': 'Unauthorized'}), 401
     
     data = request.json
@@ -619,6 +668,7 @@ def update_profile():
     profile_image = data.get('profileImage')
     
     if not username:
+        print("❌ Username is required")
         return jsonify({'error': 'Username is required'}), 400
     
     try:
@@ -628,6 +678,7 @@ def update_profile():
         })
         
         if existing_user:
+            print(f"❌ Username {username} already taken")
             return jsonify({'error': 'Username already taken'}), 400
         
         update_data = {'username': username}
@@ -640,6 +691,7 @@ def update_profile():
         )
         
         if result.matched_count == 0:
+            print(f"❌ User not found: {user_id}")
             return jsonify({'error': 'User not found'}), 404
         
         updated_user = users_collection.find_one({'_id': ObjectId(user_id)})
@@ -652,6 +704,7 @@ def update_profile():
             'profileImage': updated_user.get('profileImage')
         }
         
+        print(f"✅ Profile updated for user: {user_id}")
         return jsonify({
             'success': True,
             'user_id': str(updated_user['_id']),
@@ -664,6 +717,8 @@ def update_profile():
         
     except Exception as e:
         print(f"❌ Error updating profile: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/auth/send-registration-otp', methods=['POST'])
@@ -672,11 +727,13 @@ def send_registration_otp():
     email = data.get('email')
     
     if not email:
+        print("❌ Email is required")
         return jsonify({'error': 'Email is required'}), 400
     
     try:
         existing_user = users_collection.find_one({'email': email})
         if existing_user:
+            print(f"❌ Email {email} already exists")
             return jsonify({'error': 'User already exists with this email'}), 400
         
         import random
@@ -707,6 +764,8 @@ def send_registration_otp():
         
     except Exception as e:
         print(f"❌ Error sending registration OTP: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/auth/verify-registration-otp', methods=['POST'])
@@ -716,6 +775,7 @@ def verify_registration_otp():
     otp = data.get('otp')
     
     if not email or not otp:
+        print("❌ Email and OTP are required")
         return jsonify({'error': 'Email and OTP are required'}), 400
     
     try:
@@ -727,9 +787,11 @@ def verify_registration_otp():
         })
         
         if not stored_otp:
+            print(f"❌ Invalid OTP for email: {email}")
             return jsonify({'error': 'Invalid OTP'}), 400
         
         if time.time() - stored_otp['created_at'] > 300:
+            print(f"❌ OTP expired for email: {email}")
             return jsonify({'error': 'OTP expired'}), 400
         
         otp_collection.update_one(
@@ -737,6 +799,7 @@ def verify_registration_otp():
             {'$set': {'verified': True}}
         )
         
+        print(f"✅ OTP verified for email: {email}")
         return jsonify({
             'success': True,
             'message': 'Email verified successfully'
@@ -744,17 +807,21 @@ def verify_registration_otp():
         
     except Exception as e:
         print(f"❌ Error verifying registration OTP: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/auth/send-delete-otp', methods=['POST'])
 def send_delete_otp():
     user_id = get_user_id_from_request()
     if not user_id:
+        print("❌ Unauthorized: No user_id")
         return jsonify({'error': 'Unauthorized'}), 401
     
     try:
         user = users_collection.find_one({'_id': ObjectId(user_id)})
         if not user:
+            print(f"❌ User not found: {user_id}")
             return jsonify({'error': 'User not found'}), 404
         
         email = user['email']
@@ -787,23 +854,28 @@ def send_delete_otp():
         
     except Exception as e:
         print(f"❌ Error sending delete OTP: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/auth/account', methods=['DELETE'])
 def delete_account():
     user_id = get_user_id_from_request()
     if not user_id:
+        print("❌ Unauthorized: No user_id")
         return jsonify({'error': 'Unauthorized'}), 401
     
     data = request.json
     otp = data.get('otp')
     
     if not otp:
+        print("❌ OTP is required")
         return jsonify({'error': 'OTP is required'}), 400
     
     try:
         user = users_collection.find_one({'_id': ObjectId(user_id)})
         if not user:
+            print(f"❌ User not found: {user_id}")
             return jsonify({'error': 'User not found'}), 404
         
         email = user['email']
@@ -816,15 +888,18 @@ def delete_account():
         })
         
         if not stored_otp:
+            print(f"❌ Invalid OTP for email: {email}")
             return jsonify({'error': 'Invalid OTP'}), 400
         
         if time.time() - stored_otp['created_at'] > 300:
+            print(f"❌ OTP expired for email: {email}")
             return jsonify({'error': 'OTP expired'}), 400
         
         users_collection.delete_one({'_id': ObjectId(user_id)})
         chat_history_collection.delete_many({'user_id': user_id})
         otp_collection.delete_many({'email': email})
         
+        print(f"✅ Account deleted for user: {user_id}")
         return jsonify({
             'success': True,
             'message': 'Account deleted successfully'
@@ -832,6 +907,8 @@ def delete_account():
         
     except Exception as e:
         print(f"❌ Error deleting account: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': 'Internal server error'}), 500
 
 @app.route('/api/test', methods=['GET'])
@@ -841,6 +918,7 @@ def test_connection():
         users_count = users_collection.count_documents({})
         chats_count = chat_history_collection.count_documents({})
         
+        print("✅ Test connection successful")
         return jsonify({
             'status': 'success',
             'database': 'connected',
@@ -849,6 +927,9 @@ def test_connection():
             'collections': db.list_collection_names()
         })
     except Exception as e:
+        print(f"❌ Test connection failed: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({
             'status': 'error',
             'error': str(e)
@@ -866,6 +947,7 @@ def create_test_user():
         
         existing_user = users_collection.find_one({'email': test_user['email']})
         if existing_user:
+            print(f"ℹ️ Test user already exists: {test_user['email']}")
             return jsonify({
                 'message': 'Test user already exists',
                 'user': {
@@ -877,6 +959,7 @@ def create_test_user():
         
         result = users_collection.insert_one(test_user)
         
+        print(f"✅ Test user created: {test_user['email']}")
         return jsonify({
             'message': 'Test user created successfully',
             'user': {
@@ -886,6 +969,9 @@ def create_test_user():
             }
         })
     except Exception as e:
+        print(f"❌ Error creating test user: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 @app.route('/api/test/users', methods=['GET'])
@@ -894,13 +980,18 @@ def list_users():
         users = list(users_collection.find({}, {'password': 0}))
         for user in users:
             user['_id'] = str(user['_id'])
+        print(f"✅ Retrieved {len(users)} users")
         return jsonify({
             'users': users,
             'count': len(users)
         })
     except Exception as e:
+        print(f"❌ Error listing users: {e}")
+        import traceback
+        print(traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
+    print(f"🚀 Starting Flask server on port {port}")
     app.run(host="0.0.0.0", port=port)

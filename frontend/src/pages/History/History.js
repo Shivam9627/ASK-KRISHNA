@@ -86,13 +86,11 @@ const History = () => {
   const deleteChat = async (id) => {
     if (!currentUser) return;
     try {
-      console.log('🗑️ Deleting chat:', id);
       await chatService.deleteChat(id);
       setChatHistory(prevHistory => prevHistory.filter(chat => chat._id !== id));
       setFilteredHistory(prevHistory => prevHistory.filter(chat => chat._id !== id));
-      console.log('✅ Chat deleted:', id);
     } catch (e) {
-      console.error('❌ Error deleting chat:', e);
+      console.error('Error deleting chat:', e);
       setError('Failed to delete chat');
     }
   };
@@ -101,13 +99,11 @@ const History = () => {
     if (!currentUser) return;
     if (!window.confirm('Delete all your chat history? This cannot be undone.')) return;
     try {
-      console.log('🧹 Deleting all chats for user:', currentUser.user_id);
       await chatService.deleteAllHistory();
       setChatHistory([]);
       setFilteredHistory([]);
-      console.log('✅ All chats deleted');
     } catch (e) {
-      console.error('❌ Error deleting all chats:', e);
+      console.error('Error deleting all chats:', e);
       setError('Failed to delete all chats');
     }
   };

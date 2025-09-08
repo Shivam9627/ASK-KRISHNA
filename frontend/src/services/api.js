@@ -55,6 +55,15 @@ api.interceptors.request.use(
   }
 );
 
+// Add response interceptor for better error handling
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    console.error('❌ API Response Error:', error.response?.data || error.message);
+    return Promise.reject(error);
+  }
+);
+
 // Chat related API calls
 const chatService = {
   sendMessage: async (message, language = 'english') => {
@@ -122,24 +131,22 @@ const chatService = {
 const authService = {
   register: async (username, email, password) => {
     try {
-      console.log('🔍 Registering user:', { username, email });
       const response = await api.post('/api/auth/register', { username, email, password });
       if (response.data && response.data.token) {
         localStorage.setItem('user', JSON.stringify(response.data));
-        console.log('✅ User registered:', response.data);
       }
       return response.data;
     } catch (error) {
-      console.error('❌ Error registering user:', error);
+      console.error('Error registering user:', error);
       throw error;
     }
   },
   
   login: async (email, password) => {
     try {
-      console.log('🔍 Attempting login with:', { email });
+      console.log("🔍 Attempting login with:", { email, password });
       const response = await api.post('/api/auth/login', { email, password });
-      console.log('✅ Login response:', response.data);
+      console.log("✅ Login response:", response.data);
       if (response.data && response.data.token) {
         localStorage.setItem('user', JSON.stringify(response.data));
       }
@@ -153,85 +160,71 @@ const authService = {
   
   logout: async () => {
     try {
-      console.log('🔍 Logging out');
       const response = await api.post('/api/auth/logout');
       localStorage.removeItem('user');
-      console.log('✅ Logged out:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ Error logging out:', error);
+      console.error('Error logging out:', error);
       throw error;
     }
   },
 
   updateProfile: async (profileData) => {
     try {
-      console.log('🔍 Updating profile:', profileData);
       const response = await api.put('/api/auth/profile', profileData);
-      console.log('✅ Profile updated:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ Error updating profile:', error);
+      console.error('Error updating profile:', error);
       throw error;
     }
   },
 
   getProfile: async () => {
     try {
-      console.log('🔍 Fetching profile');
       const response = await api.get('/api/auth/profile');
-      console.log('✅ Profile response:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ Error fetching profile:', error);
+      console.error('Error fetching profile:', error);
       throw error;
     }
   },
 
   sendRegistrationOTP: async (email) => {
     try {
-      console.log('🔍 Sending registration OTP to:', email);
       const response = await api.post('/api/auth/send-registration-otp', { email });
-      console.log('✅ OTP sent:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ Error sending registration OTP:', error);
+      console.error('Error sending registration OTP:', error);
       throw error;
     }
   },
 
   verifyRegistrationOTP: async (email, otp) => {
     try {
-      console.log('🔍 Verifying OTP for:', email);
       const response = await api.post('/api/auth/verify-registration-otp', { email, otp });
-      console.log('✅ OTP verified:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ Error verifying registration OTP:', error);
+      console.error('Error verifying registration OTP:', error);
       throw error;
     }
   },
 
   sendDeleteOTP: async () => {
     try {
-      console.log('🔍 Sending delete account OTP');
       const response = await api.post('/api/auth/send-delete-otp');
-      console.log('✅ Delete OTP sent:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ Error sending delete OTP:', error);
+      console.error('Error sending delete OTP:', error);
       throw error;
     }
   },
 
   deleteAccount: async (otp) => {
     try {
-      console.log('🔍 Deleting account with OTP');
       const response = await api.delete('/api/auth/account', { data: { otp } });
-      console.log('✅ Account deleted:', response.data);
       return response.data;
     } catch (error) {
-      console.error('❌ Error deleting account:', error);
+      console.error('Error deleting account:', error);
       throw error;
     }
   },
