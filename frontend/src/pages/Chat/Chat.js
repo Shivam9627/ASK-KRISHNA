@@ -11,6 +11,7 @@ const Chat = () => {
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState('hindi');
+  const [error, setError] = useState('');
   const messagesEndRef = useRef(null);
   const { currentUser } = useAuth();
   const location = useLocation();
@@ -19,23 +20,33 @@ const Chat = () => {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
+  // Check authentication status
   useEffect(() => {
     if (!currentUser) {
       setShowLoginPrompt(true);
+      setMessages([]);
+      setIsHistoryView(false);
     } else {
       setShowLoginPrompt(false);
     }
   }, [currentUser]);
 
+  // Load saved language preference
   useEffect(() => {
     const storedLang = localStorage.getItem('chatLanguage');
-    if (storedLang) setLanguage(storedLang);
+    if (storedLang) {
+      console.log('🔍 Loading saved language:', storedLang);
+      setLanguage(storedLang);
+    }
   }, []);
 
+  // Save language preference
   useEffect(() => {
+    console.log('🔍 Saving language to localStorage:', language);
     localStorage.setItem('chatLanguage', language);
   }, [language]);
 
+  // Scroll to bottom of messages
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   };
@@ -44,6 +55,7 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Load chat history if viewing a specific chat
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const chatId = params.get('id');
@@ -53,21 +65,28 @@ const Chat = () => {
       chatService.getChatById(chatId)
         .then(chat => {
           console.log('✅ Chat loaded:', chat);
-          setMessages(chat.messages?.filter(
+          const chatMessages = chat.messages?.filter(
             msg => msg.role === 'user' || msg.role === 'assistant'
-          ) || []);
+          ) || [];
+          setMessages(chatMessages);
           setIsHistoryView(true);
         })
         .catch(error => {
           console.error('❌ Error loading chat history:', error);
+          setError('Failed to load chat history. Please try again.');
           setMessages([]);
+          setIsHistoryView(true);
         })
-        .finally(() => setHistoryLoading(false));
+        .finally(() => {
+          setHistoryLoading(false);
+        });
     } else {
       setIsHistoryView(false);
+      setMessages([]);
     }
   }, [location.search, currentUser]);
 
+  // Handle sending a message
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (!input.trim()) return;
@@ -75,48 +94,81 @@ const Chat = () => {
       setShowLoginPrompt(true);
       return;
     }
-    if (isHistoryView) return;
+    if (isHistoryView) {
+      setError('Cannot send messages in history view. Start a new chat.');
+      return;
+    }
 
-    setMessages(prev => [...prev, { role: 'user', content: input }]);
+    const userMessage = { role: 'user', content: input };
+    setMessages(prev => [...prev, userMessage]);
     setInput('');
     setIsLoading(true);
+    setError('');
 
     try {
       console.log('🔍 Sending message:', input, 'Language:', language);
       const response = await chatService.sendMessage(input, language);
       console.log('✅ API response:', response);
 
-      let responseContent = response.response || 'Sorry, no response received';
+      const responseContent = response.response || 'Sorry, no response received';
       setMessages(prev => [...prev, { role: 'assistant', content: responseContent }]);
     } catch (error) {
       console.error('❌ Error sending message:', error);
+      console.log('Error details:', {
+        message: error.message,
+        response: error.response,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      let errorMessage = 'Sorry, there was an error processing your request. Please try again.';
       if (error.response?.status === 401) {
+        errorMessage = 'Session expired. Please log in again.';
         setShowLoginPrompt(true);
-      } else {
-        setMessages(prev => [...prev, { role: 'assistant', content: 'Sorry, there was an error processing your request. Please try again.' }]);
+      } else if (error.response?.status === 400) {
+        errorMessage = error.response.data?.error || 'Invalid request. Please check your input.';
+      } else if (error.response?.status === 500) {
+        errorMessage = 'Server error. Please try again later or contact support.';
       }
+      setError(errorMessage);
+      setMessages(prev => [...prev, { role: 'assistant', content: errorMessage }]);
     } finally {
       setIsLoading(false);
     }
   };
 
+  // Clear chat messages
   const clearChat = () => {
+    if (isHistoryView) {
+      setError('Cannot clear messages in history view.');
+      return;
+    }
     setMessages([]);
+    setError('');
     localStorage.removeItem('chatMessages');
+    console.log('🗑️ Chat messages cleared');
   };
 
+  // Toggle language between English and Hindi
   const toggleLanguage = () => {
-    setLanguage(prev => prev === 'english' ? 'hindi' : 'english');
+    setLanguage(prev => {
+      const newLang = prev === 'english' ? 'hindi' : 'english';
+      console.log('🔄 Switching language to:', newLang);
+      return newLang;
+    });
   };
 
+  // Redirect to login or register
   const handleLoginRedirect = () => {
+    console.log('🔍 Redirecting to login');
     navigate('/login');
   };
 
   const handleRegisterRedirect = () => {
+    console.log('🔍 Redirecting to register');
     navigate('/register');
   };
 
+  // Render login prompt if not authenticated
   if (showLoginPrompt) {
     return (
       <div className="chat-container">
@@ -155,14 +207,31 @@ const Chat = () => {
             <FaLanguage />
             <span>{language === 'english' ? 'EN' : 'HI'}</span>
           </button>
-          <button className="clear-chat" onClick={clearChat} title="Clear chat history">
+          <button
+            className="clear-chat"
+            onClick={clearChat}
+            title="Clear chat history"
+            disabled={isHistoryView}
+          >
             <FaTrash />
           </button>
         </div>
       </div>
 
+      {error && (
+        <div className="error-message">
+          {error}
+          <span className="close-btn" onClick={() => setError('')}>
+            &times;
+          </span>
+        </div>
+      )}
+
       {historyLoading ? (
-        <div className="loading-indicator"><FaSpinner className="spinner" /> Loading conversation...</div>
+        <div className="loading-indicator">
+          <FaSpinner className="spinner" />
+          Loading conversation...
+        </div>
       ) : (
         <div className="messages-container">
           {messages.length === 0 ? (
