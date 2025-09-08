@@ -29,17 +29,14 @@ const History = () => {
         setError('');
         console.log('🔍 Fetching chat history for user:', currentUser.user_id);
         
-        const history = await chatService.getChatHistory();
+        const history = await chatService.getHistory();
         console.log('✅ Chat history received:', history);
         
-        // Ensure history is an array
         let historyArray = Array.isArray(history) ? history : [];
-        // Ensure most recent first on client too, in case backend order changes
         historyArray = historyArray.sort((a, b) => {
           const ta = (a.created_at ?? 0);
           const tb = (b.created_at ?? 0);
           if (tb !== ta) return tb - ta;
-          // Fallback to _id timestamp if needed
           return (b._id || '').localeCompare(a._id || '');
         });
         console.log('📊 Processed history array:', historyArray);
@@ -89,11 +86,13 @@ const History = () => {
   const deleteChat = async (id) => {
     if (!currentUser) return;
     try {
+      console.log('🗑️ Deleting chat:', id);
       await chatService.deleteChat(id);
       setChatHistory(prevHistory => prevHistory.filter(chat => chat._id !== id));
       setFilteredHistory(prevHistory => prevHistory.filter(chat => chat._id !== id));
+      console.log('✅ Chat deleted:', id);
     } catch (e) {
-      console.error('Error deleting chat:', e);
+      console.error('❌ Error deleting chat:', e);
       setError('Failed to delete chat');
     }
   };
@@ -102,11 +101,13 @@ const History = () => {
     if (!currentUser) return;
     if (!window.confirm('Delete all your chat history? This cannot be undone.')) return;
     try {
-      await chatService.deleteAllChats();
+      console.log('🧹 Deleting all chats for user:', currentUser.user_id);
+      await chatService.deleteAllHistory();
       setChatHistory([]);
       setFilteredHistory([]);
+      console.log('✅ All chats deleted');
     } catch (e) {
-      console.error('Error deleting all chats:', e);
+      console.error('❌ Error deleting all chats:', e);
       setError('Failed to delete all chats');
     }
   };
