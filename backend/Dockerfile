@@ -1,12 +1,12 @@
 FROM python:3.9-slim
 
-   WORKDIR /app
+WORKDIR /app
 
-   COPY requirements.txt .
-   RUN pip install --no-cache-dir -r requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
 
-   COPY . .
+COPY . .
 
-   EXPOSE 8080
+EXPOSE 8080
 
-   CMD ["gunicorn", "--workers=1", "--bind", "0.0.0.0:8080", "backend_integration:app"]
+CMD ["gunicorn", "--workers=1", "--bind", "0.0.0.0:8080", "backend_integration:app"]
