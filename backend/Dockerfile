@@ -14,12 +14,14 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-COPY backend/requirements.txt ./requirements.txt
+# Copy requirements from backend folder
+COPY backend/requirements.txt requirements.txt
 
+# Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Copy the whole project (backend + anything else)
 COPY . .
 
 # Run your Flask app with Gunicorn
-# Assuming your Flask instance is called `app` inside backend_integration.py
 CMD ["gunicorn", "-b", "0.0.0.0:8080", "backend.backend_integration:app"]
