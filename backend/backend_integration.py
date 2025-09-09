@@ -51,13 +51,32 @@ except Exception as e:
 
 # Flask setup
 app = Flask(__name__)
-CORS(app, origins=["http://localhost:3000", "https://*.vercel.app"])
+CORS(app, resources={
+    r"/api/*": {
+        "origins": [
+            "http://localhost:3000",
+            "https://ask-krishna-pi.vercel.app",
+            "https://*.vercel.app",
+            "https://ask-krishna-production.up.railway.app"  # For backend-to-backend testing
+        ],
+        "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+        "allow_headers": ["Content-Type", "Authorization", "X-User-Id"],
+        "supports_credentials": True
+    }
+})
 limiter = Limiter(
     get_remote_address,
     app=app,
     default_limits=["100 per day", "10 per hour"],
     storage_uri="memory://"
 )
+# Exempt OPTIONS requests from rate limiting
+limiter.exempt(app, methods=["OPTIONS"])
+
+# Debug request logging
+@app.before_request
+def log_request():
+    print(f"🔍 Request: {request.method} {request.path} Headers: {request.headers}")
 
 # Initialize models
 embed_model, llm, qdrant_client, index = None, None, None, None
@@ -332,9 +351,12 @@ def get_cached_response(prompt, user_id):
         print(f"❌ Error checking cache: {e}")
         return None
 
-@app.route('/api/chat', methods=['POST'])
+@app.route('/api/chat', methods=['POST', 'OPTIONS'])
 @limiter.limit("5 per minute")
 def chat():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/chat")
+        return jsonify({"status": "ok"}), 200
     global embed_model, llm, qdrant_client, index
     data = request.json
     prompt = data.get('prompt')
@@ -410,8 +432,11 @@ def chat():
         print(f"Error in /api/chat: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/history', methods=['GET'])
+@app.route('/api/history', methods=['GET', 'OPTIONS'])
 def get_history():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/history")
+        return jsonify({"status": "ok"}), 200
     user_id = get_user_id_from_request()
     if not user_id:
         print("❌ No user ID found in request")
@@ -441,8 +466,11 @@ def get_history():
         print(f"❌ Error fetching history: {e}")
         return jsonify([])
 
-@app.route('/api/history/<chat_id>', methods=['GET'])
+@app.route('/api/history/<chat_id>', methods=['GET', 'OPTIONS'])
 def get_single_chat(chat_id):
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/history/<chat_id>")
+        return jsonify({"status": "ok"}), 200
     user_id = get_user_id_from_request()
     if not user_id:
         return jsonify({'error': 'Unauthorized'}), 401
@@ -504,8 +532,11 @@ def delete_all_history():
         print(f"❌ Error deleting all history: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/auth/register', methods=['POST'])
+@app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
 def register():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/auth/register")
+        return jsonify({"status": "ok"}), 200
     data = request.json
     username = data.get('username')
     email = data.get('email')
@@ -548,8 +579,11 @@ def register():
         'token': json.dumps(token_data)
     })
 
-@app.route('/api/auth/login', methods=['POST'])
+@app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
 def login():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/auth/login")
+        return jsonify({"status": "ok"}), 200
     data = request.json
     email = data.get('email')
     password = data.get('password')
@@ -580,12 +614,18 @@ def login():
         'token': json.dumps(token_data)
     })
 
-@app.route('/api/auth/logout', methods=['POST'])
+@app.route('/api/auth/logout', methods=['POST', 'OPTIONS'])
 def logout():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/auth/logout")
+        return jsonify({"status": "ok"}), 200
     return jsonify({'success': True})
 
-@app.route('/api/auth/profile', methods=['GET'])
+@app.route('/api/auth/profile', methods=['GET', 'OPTIONS'])
 def get_profile():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/auth/profile")
+        return jsonify({"status": "ok"}), 200
     user_id = get_user_id_from_request()
     if not user_id:
         return jsonify({'error': 'Unauthorized'}), 401
@@ -604,8 +644,11 @@ def get_profile():
         print(f"❌ Error fetching profile: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/auth/profile', methods=['PUT'])
+@app.route('/api/auth/profile', methods=['PUT', 'OPTIONS'])
 def update_profile():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/auth/profile")
+        return jsonify({"status": "ok"}), 200
     user_id = get_user_id_from_request()
     if not user_id:
         return jsonify({'error': 'Unauthorized'}), 401
@@ -651,8 +694,11 @@ def update_profile():
         print(f"❌ Error updating profile: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/auth/send-registration-otp', methods=['POST'])
+@app.route('/api/auth/send-registration-otp', methods=['POST', 'OPTIONS'])
 def send_registration_otp():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/auth/send-registration-otp")
+        return jsonify({"status": "ok"}), 200
     data = request.json
     email = data.get('email')
     if not email:
@@ -686,8 +732,11 @@ def send_registration_otp():
         print(f"❌ Error sending registration OTP: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/auth/verify-registration-otp', methods=['POST'])
+@app.route('/api/auth/verify-registration-otp', methods=['POST', 'OPTIONS'])
 def verify_registration_otp():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/auth/verify-registration-otp")
+        return jsonify({"status": "ok"}), 200
     data = request.json
     email = data.get('email')
     otp = data.get('otp')
@@ -716,8 +765,11 @@ def verify_registration_otp():
         print(f"❌ Error verifying registration OTP: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/auth/send-delete-otp', methods=['POST'])
+@app.route('/api/auth/send-delete-otp', methods=['POST', 'OPTIONS'])
 def send_delete_otp():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/auth/send-delete-otp")
+        return jsonify({"status": "ok"}), 200
     user_id = get_user_id_from_request()
     if not user_id:
         return jsonify({'error': 'Unauthorized'}), 401
@@ -751,8 +803,11 @@ def send_delete_otp():
         print(f"❌ Error sending delete OTP: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/auth/account', methods=['DELETE'])
+@app.route('/api/auth/account', methods=['DELETE', 'OPTIONS'])
 def delete_account():
+    if request.method == "OPTIONS":
+        print("🔍 Handling OPTIONS request for /api/auth/account")
+        return jsonify({"status": "ok"}), 200
     user_id = get_user_id_from_request()
     if not user_id:
         return jsonify({'error': 'Unauthorized'}), 401
