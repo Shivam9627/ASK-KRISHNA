@@ -3,6 +3,8 @@ import json
 import time
 from flask import Flask, request, jsonify
 from flask_cors import CORS
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 import pymongo
 from bson import ObjectId
 import smtplib
@@ -17,6 +19,7 @@ from llama_index.core import ChatPromptTemplate
 from llama_index.core.llms import ChatMessage, MessageRole
 from llama_index.embeddings.fastembed import FastEmbedEmbedding
 from llama_index.llms.groq import Groq
+import psutil
 
 # Load environment variables from .env file
 load_dotenv()
@@ -55,34 +58,37 @@ except Exception as e:
 
 app = Flask(__name__)
 CORS(app, origins=["*", "https://*.vercel.app"])  # Allow Vercel origins
+limiter = Limiter(app, key_func=get_remote_address, default_limits=["100 per day", "10 per hour"])
 
 # Initialize models at startup
 embed_model, llm, qdrant_client = None, None, None
 
 def initialize_models():
-    try:
-        print("🔍 Initializing embedding model...")
-        embed_model = FastEmbedEmbedding(model_name="thenlper/gte-large")
-        print("✅ Embedding model initialized")
-        
-        print("🔍 Initializing Groq LLM...")
-        llm = Groq(model="deepseek-r1-distill-llama-70b")
-        print("✅ Groq LLM initialized")
-        
-        print("🔍 Initializing Qdrant client...")
-        client = qdrant_client.QdrantClient(
-            url=os.getenv("QDRANT_URL"),
-            api_key=os.getenv("QDRANT_API_KEY"),
-            prefer_grpc=True
-        )
-        print("✅ Qdrant client initialized")
-        
-        return embed_model, llm, client
-    except Exception as e:
-        print(f"❌ Failed to initialize models: {e}")
-        import traceback
-        print(traceback.format_exc())
-        raise e
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            print("🔍 Initializing embedding model...")
+            embed_model = FastEmbedEmbedding(model_name="thenlper/gte-small")  # Lighter model
+            print("✅ Embedding model initialized")
+            
+            print("🔍 Initializing Groq LLM...")
+            llm = Groq(model="mixtral-8x7b-32768")  # Lighter LLM
+            print("✅ Groq LLM initialized")
+            
+            print("🔍 Initializing Qdrant client...")
+            client = qdrant_client.QdrantClient(
+                url=os.getenv("QDRANT_URL"),
+                api_key=os.getenv("QDRANT_API_KEY"),
+                prefer_grpc=True
+            )
+            print("✅ Qdrant client initialized")
+            
+            return embed_model, llm, client
+        except Exception as e:
+            print(f"Attempt {attempt+1}/{max_retries} failed: {e}")
+            if attempt == max_retries - 1:
+                raise
+            time.sleep(2)
 
 # Email configuration
 SMTP_HOST = os.getenv("SMTP_HOST")
@@ -172,7 +178,7 @@ def get_user_id_from_request():
     print("❌ Unable to extract user_id from Authorization token")
     return None
 
-# Search function (moved from utils.py)
+# Search function
 def search(query, client, embed_model, k=5):
     collection_name = "bhagavad-gita"
     
@@ -186,7 +192,6 @@ def search(query, client, embed_model, k=5):
         except Exception as e:
             print(f"Error generating embedding (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
-                import time
                 time.sleep(retry_delay)
             else:
                 print("Failed to generate embedding after all retries")
@@ -203,13 +208,12 @@ def search(query, client, embed_model, k=5):
         except Exception as e:
             print(f"Error querying vector database (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
-                import time
                 time.sleep(retry_delay)
             else:
                 print("Failed to query vector database after all retries")
                 return models.QueryResponse(points=[])
 
-# Pipeline function (moved from utils.py)
+# Pipeline function
 message_templates = [
     ChatMessage(
         content="""
@@ -271,12 +275,11 @@ def pipeline(query, embed_model, llm, client):
         except Exception as e:
             print(f"LLM generation error (attempt {attempt+1}/{max_retries}): {e}")
             if attempt < max_retries - 1:
-                import time
                 time.sleep(retry_delay)
             else:
                 return "I apologize, but I'm having trouble generating a response right now. Please try again later."
 
-# Extract thinking and answer function (moved from utils.py)
+# Extract thinking and answer function
 def extract_thinking_and_answer(response_text):
     try:
         if not isinstance(response_text, str):
@@ -301,8 +304,12 @@ def extract_thinking_and_answer(response_text):
 @app.route("/", methods=["GET"])
 def home():
     return jsonify({
-        "message": "ASK-KRISHNA backend is live 🚀",
-        "status": "ok"
+        "message": "ASK KRISHNA - AI-Powered Bhagavad Gita Assistant",
+        "author": "[Your Name]",
+        "tech": "Flask, MongoDB, Qdrant, Groq LLM, React, Vercel",
+        "status": "live",
+        "github": "[Your GitHub Repo URL]",
+        "portfolio": "[Your Portfolio/LinkedIn URL]"
     }), 200
 
 @app.route("/ping", methods=["GET"])
@@ -312,8 +319,45 @@ def ping():
         "status": "healthy"
     }), 200
 
+@app.route('/health', methods=['GET'])
+def health():
+    try:
+        client.admin.command('ping')
+        memory = psutil.virtual_memory()
+        return jsonify({
+            "status": "healthy",
+            "mongodb": "connected",
+            "memory_used_mb": memory.used / 1024**2,
+            "memory_total_mb": memory.total / 1024**2
+        })
+    except Exception:
+        return jsonify({
+            "status": "unhealthy",
+            "mongodb": "disconnected"
+        }), 500
+
+@app.route('/api/cleanup', methods=['POST'])
+def cleanup_old_chats():
+    try:
+        threshold = time.time() - (30 * 24 * 3600)  # 30 days
+        result = chat_history_collection.delete_many({"created_at": {"$lt": threshold}})
+        return jsonify({"deleted": result.deleted_count})
+    except Exception as e:
+        print(f"❌ Error cleaning up chats: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
+
+def get_cached_response(prompt, user_id):
+    try:
+        cache = chat_history_collection.find_one({"user_id": user_id, "messages.0.content": prompt})
+        if cache:
+            return cache["messages"][1]["content"]
+        return None
+    except Exception as e:
+        print(f"❌ Error checking cache: {e}")
+        return None
 
 @app.route('/api/chat', methods=['POST'])
+@limiter.limit("5 per minute")
 def chat():
     global embed_model, llm, qdrant_client
 
@@ -330,6 +374,11 @@ def chat():
         return jsonify({'error': 'No prompt provided'}), 400
 
     try:
+        cached_response = get_cached_response(prompt, user_id)
+        if cached_response:
+            print(f"✅ Cache hit for prompt: {prompt}")
+            return jsonify({'response': cached_response, 'thinking': ''})
+
         if embed_model is None or llm is None or qdrant_client is None:
             embed_model, llm, qdrant_client = initialize_models()
 
@@ -914,5 +963,5 @@ def list_users():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 8080))
     app.run(host="0.0.0.0", port=port)
