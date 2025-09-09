@@ -2,7 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-# Install system dependencies required for PyAudio and others
+# Install system dependencies required for PyAudio, ffmpeg etc.
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
@@ -14,14 +14,17 @@ RUN apt-get update && apt-get install -y \
     ffmpeg \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements from backend folder
-COPY backend/requirements.txt requirements.txt
+# Copy requirements file (already inside backend/)
+COPY requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the whole project (backend + anything else)
+# Copy all backend code into container
 COPY . .
 
-# Run your Flask app with Gunicorn
-CMD ["gunicorn", "-b", "0.0.0.0:8080", "backend.backend_integration:app"]
+# Expose Cloud Run port
+EXPOSE 8080
+
+# Start the app
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "backend_integration:app"]
