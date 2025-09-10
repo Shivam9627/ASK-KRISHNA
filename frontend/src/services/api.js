@@ -2,13 +2,17 @@ import axios from 'axios';
 
 // Create an axios instance with default config
 const api = axios.create({
-  baseURL: process.env.NODE_ENV === 'production' ? process.env.REACT_APP_BACKEND_URL : 'http://localhost:5000',
+  baseURL: process.env.NODE_ENV === 'production' 
+    ? process.env.REACT_APP_BACKEND_URL 
+    : 'http://localhost:5000',
   headers: { 'Content-Type': 'application/json' },
+  timeout: 60000, // 60s timeout to handle slow backend
 });
 
 // Add a request interceptor to include auth token and user ID
 api.interceptors.request.use(
   (config) => {
+    console.log('🔍 Base URL:', api.defaults.baseURL); // Debug URL
     const user = localStorage.getItem('user');
     if (user) {
       try {
@@ -71,15 +75,48 @@ api.interceptors.request.use(
   }
 );
 
-// Add response interceptor for better error handling
+// Add response interceptor with retries for HTTP/2 errors
 api.interceptors.response.use(
-  (response) => response,
-  (error) => {
+  (response) => {
+    console.log(`✅ Response from ${response.config.url}:`, {
+      status: response.status,
+      data: response.data,
+    });
+    return response;
+  },
+  async (error) => {
+    const maxRetries = 3;
+    const retryDelay = 2000; // 2s base delay
+    const config = error.config;
+
+    // Log full error details
     console.error('❌ API Response Error:', {
       message: error.message,
+      code: error.code,
       status: error.response?.status,
       data: error.response?.data,
+      url: config?.url,
+      stack: error.stack,
     });
+
+    // Retry for HTTP/2 errors or network issues
+    if (
+      (error.code === 'ERR_NETWORK' || error.message.includes('ERR_HTTP2')) &&
+      !config._retryCount
+    ) {
+      config._retryCount = config._retryCount || 0;
+      if (config._retryCount < maxRetries) {
+        config._retryCount++;
+        console.log(
+          `🔄 Retrying request (${config._retryCount}/${maxRetries}) to ${config.url}...`
+        );
+        await new Promise((resolve) =>
+          setTimeout(resolve, retryDelay * config._retryCount)
+        );
+        return api(config); // Retry the request
+      }
+    }
+
     return Promise.reject(error);
   }
 );
@@ -95,8 +132,10 @@ const chatService = {
     } catch (error) {
       console.error('❌ Error sending message:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -111,8 +150,10 @@ const chatService = {
     } catch (error) {
       console.error('❌ Error fetching chat history:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -127,8 +168,10 @@ const chatService = {
     } catch (error) {
       console.error('❌ Error deleting chat:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -143,8 +186,10 @@ const chatService = {
     } catch (error) {
       console.error('❌ Error deleting all chats:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -159,8 +204,10 @@ const chatService = {
     } catch (error) {
       console.error('❌ Error fetching chat by ID:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -181,8 +228,10 @@ const authService = {
     } catch (error) {
       console.error('❌ Error registering user:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -200,8 +249,10 @@ const authService = {
     } catch (error) {
       console.error('❌ Error logging in:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -217,8 +268,10 @@ const authService = {
     } catch (error) {
       console.error('❌ Error logging out:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -236,8 +289,10 @@ const authService = {
     } catch (error) {
       console.error('❌ Error updating profile:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -252,8 +307,10 @@ const authService = {
     } catch (error) {
       console.error('❌ Error fetching profile:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -268,8 +325,10 @@ const authService = {
     } catch (error) {
       console.error('❌ Error sending registration OTP:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -284,8 +343,10 @@ const authService = {
     } catch (error) {
       console.error('❌ Error verifying registration OTP:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -300,8 +361,10 @@ const authService = {
     } catch (error) {
       console.error('❌ Error sending delete OTP:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }
@@ -317,8 +380,10 @@ const authService = {
     } catch (error) {
       console.error('❌ Error deleting account:', {
         message: error.message,
+        code: error.code,
         status: error.response?.status,
         data: error.response?.data,
+        stack: error.stack,
       });
       throw error;
     }

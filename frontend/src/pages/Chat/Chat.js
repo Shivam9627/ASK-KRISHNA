@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaPaperPlane, FaTrash, FaSpinner, FaLanguage } from 'react-icons/fa';
+import { FaPaperPlane, FaTrash, FaSpinner, FaLanguage, FaMicrophone, FaVolumeUp } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../../contexts/AuthContext';
 import { chatService } from '../../services/api';
@@ -12,13 +12,55 @@ const Chat = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [language, setLanguage] = useState('hindi');
   const [error, setError] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(null); // Track which message is being spoken
   const messagesEndRef = useRef(null);
+  const recognitionRef = useRef(null);
   const { currentUser } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isHistoryView, setIsHistoryView] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+
+  // Initialize SpeechRecognition
+  useEffect(() => {
+    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
+      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      recognitionRef.current = new SpeechRecognition();
+      recognitionRef.current.lang = language === 'hindi' ? 'hi-IN' : 'en-IN';
+      recognitionRef.current.interimResults = true;
+      recognitionRef.current.continuous = false;
+
+      recognitionRef.current.onresult = (event) => {
+        const transcript = Array.from(event.results)
+          .map(result => result[0].transcript)
+          .join('');
+        setInput(transcript);
+        console.log('🎙️ Speech recognized:', transcript);
+      };
+
+      recognitionRef.current.onerror = (event) => {
+        console.error('❌ Speech recognition error:', event.error);
+        setIsListening(false);
+        if (event.error === 'no-speech') {
+          setError('No speech detected. Please try again.');
+        } else if (event.error === 'not-allowed') {
+          setError('Microphone permission denied. Please enable it in your browser settings.');
+        } else {
+          setError('Speech recognition failed. Please try again.');
+        }
+      };
+
+      recognitionRef.current.onend = () => {
+        setIsListening(false);
+        console.log('🎙️ Speech recognition stopped');
+      };
+    } else {
+      console.warn('⚠️ SpeechRecognition API not supported in this browser');
+      setError('Speech recognition is not supported in your browser.');
+    }
+  }, [language]);
 
   // Check authentication status
   useEffect(() => {
@@ -85,6 +127,73 @@ const Chat = () => {
       setMessages([]);
     }
   }, [location.search, currentUser]);
+
+  // Handle speech input
+  const handleMicClick = () => {
+    if (!recognitionRef.current) {
+      setError('Speech recognition is not supported in your browser.');
+      return;
+    }
+    if (isListening) {
+      recognitionRef.current.stop();
+      setIsListening(false);
+    } else {
+      try {
+        recognitionRef.current.lang = language === 'hindi' ? 'hi-IN' : 'en-IN';
+        recognitionRef.current.start();
+        setIsListening(true);
+        setError('');
+        console.log('🎙️ Starting speech recognition in', recognitionRef.current.lang);
+      } catch (err) {
+        console.error('❌ Error starting speech recognition:', err);
+        setError('Failed to start speech recognition. Please check microphone permissions.');
+        setIsListening(false);
+      }
+    }
+  };
+
+  // Handle text-to-speech
+  const handleSpeak = (text, messageIndex) => {
+    if ('speechSynthesis' in window) {
+      if (isSpeaking === messageIndex) {
+        window.speechSynthesis.cancel();
+        setIsSpeaking(null);
+        console.log('🔊 Stopped speaking');
+        return;
+      }
+
+      window.speechSynthesis.cancel(); // Cancel any ongoing speech
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = language === 'hindi' ? 'hi-IN' : 'en-IN';
+
+      // Select appropriate voice
+      const voices = window.speechSynthesis.getVoices();
+      const voice = voices.find(v => v.lang === (language === 'hindi' ? 'hi-IN' : 'en-IN')) || voices[0];
+      utterance.voice = voice;
+      utterance.volume = 1.0;
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+
+      utterance.onstart = () => {
+        setIsSpeaking(messageIndex);
+        console.log('🔊 Started speaking:', text.substring(0, 50) + '...');
+      };
+      utterance.onend = () => {
+        setIsSpeaking(null);
+        console.log('🔊 Finished speaking');
+      };
+      utterance.onerror = (event) => {
+        console.error('❌ Speech synthesis error:', event.error);
+        setIsSpeaking(null);
+        setError('Failed to play audio. Please try again.');
+      };
+
+      window.speechSynthesis.speak(utterance);
+    } else {
+      console.warn('⚠️ SpeechSynthesis API not supported in this browser');
+      setError('Text-to-speech is not supported in your browser.');
+    }
+  };
 
   // Handle sending a message
   const handleSubmit = async (e) => {
@@ -242,16 +351,40 @@ const Chat = () => {
             </div>
           ) : (
             messages.map((msg, idx) => (
-              <div key={idx} className={`message ${msg.role}`}>
-                <ReactMarkdown>{msg.content}</ReactMarkdown>
+              <div key={idx} className={`message-row ${msg.role}-row`}>
+                {msg.role === 'assistant' && (
+                  <button
+                    className={`listen-btn ${isSpeaking === idx ? 'playing' : ''}`}
+                    onClick={() => handleSpeak(msg.content, idx)}
+                    title={isSpeaking === idx ? 'Stop' : 'Listen'}
+                  >
+                    <span className="listen-btn-icon">
+                      <FaVolumeUp />
+                    </span>
+                    {isSpeaking === idx && (
+                      <div className="listen-btn-waves">
+                        <span></span>
+                        <span></span>
+                        <span></span>
+                      </div>
+                    )}
+                  </button>
+                )}
+                <div className={`message ${msg.role}`}>
+                  <div className={`message-bubble ${msg.role}-bubble`}>
+                    <ReactMarkdown>{msg.content}</ReactMarkdown>
+                  </div>
+                </div>
               </div>
             ))
           )}
           {isLoading && !isHistoryView && (
-            <div className="message assistant loading">
-              <div className="loading-indicator">
-                <FaSpinner className="spinner" />
-                <span>Krishna is thinking...</span>
+            <div className="message-row assistant-row">
+              <div className="message assistant loading">
+                <div className="loading-indicator">
+                  <FaSpinner className="spinner" />
+                  <span>Krishna is thinking...</span>
+                </div>
               </div>
             </div>
           )}
@@ -267,6 +400,15 @@ const Chat = () => {
           placeholder="Ask a question about the Bhagavad Gita..."
           disabled={isLoading || isHistoryView}
         />
+        <button
+          type="button"
+          className={`mic-button ${isListening ? 'active' : ''}`}
+          onClick={handleMicClick}
+          title={isListening ? 'Stop Listening' : 'Start Listening'}
+          disabled={isLoading || isHistoryView}
+        >
+          <FaMicrophone />
+        </button>
         <button type="submit" disabled={isLoading || !input.trim() || isHistoryView}>
           <FaPaperPlane />
         </button>

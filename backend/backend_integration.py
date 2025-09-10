@@ -35,7 +35,7 @@ if "://" in MONGO_URI:
     if "@" in rest:
         user_pass, host = rest.split("@", 1)
         safe_uri = f"{protocol}://[REDACTED]@{host}"
-print(f"Connecting to MongoDB with URI: {safe_uri}")
+print(f"🔍 Connecting to MongoDB with URI: {safe_uri}")
 try:
     client = pymongo.MongoClient(MONGO_URI)
     db = client["bhagavad_gita_assistant"]
@@ -57,7 +57,7 @@ CORS(app, resources={
             "http://localhost:3000",
             "https://ask-krishna-pi.vercel.app",
             "https://*.vercel.app",
-            "https://ask-krishna-production.up.railway.app"  # For backend-to-backend testing
+            "https://ask-krishna-production.up.railway.app"
         ],
         "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
         "allow_headers": ["Content-Type", "Authorization", "X-User-Id"],
@@ -73,49 +73,61 @@ limiter = Limiter(
 @app.before_request
 def skip_options_rate_limit():
     if request.method == "OPTIONS":
-        return None  # Skip rate limiting for OPTIONS requests
+        return None  # Skip rate limiting for OPTIONS
 
 # Debug request logging
 @app.before_request
 def log_request():
-    print(f"🔍 Request: {request.method} {request.path} Headers: {request.headers}")
+    print(f"🔍 Request: {request.method} {request.path} Headers: {dict(request.headers)}")
 
-# Initialize models
+# Initialize models at startup
 embed_model, llm, qdrant_client, index = None, None, None, None
 
 def initialize_models():
     global embed_model, llm, qdrant_client, index
     max_retries = 3
+    start_time = time.time()
     for attempt in range(max_retries):
         try:
             print("🔍 Initializing embedding model...")
             embed_model = FastEmbedEmbedding(model_name="thenlper/gte-small")
-            print("✅ Embedding model initialized")
-            
+            print(f"✅ Embedding model initialized in {time.time() - start_time:.2f}s")
+
             print("🔍 Initializing Groq LLM...")
             llm = Groq(model="mixtral-8x7b-32768")
-            print("✅ Groq LLM initialized")
-            
+            print(f"✅ Groq LLM initialized in {time.time() - start_time:.2f}s")
+
             print("🔍 Initializing Qdrant client...")
             qdrant_client = QdrantClient(
                 url=os.getenv("QDRANT_URL"),
                 api_key=os.getenv("QDRANT_API_KEY"),
                 prefer_grpc=True
             )
-            print("✅ Qdrant client initialized")
-            
+            print(f"✅ Qdrant client initialized in {time.time() - start_time:.2f}s")
+
             print("🔍 Loading documents and creating index...")
-            # Updated path: PDF is now in the same directory as the app
+            if not os.path.exists("Bhagavad-gita.pdf"):
+                print("❌ PDF file not found at Bhagavad-gita.pdf")
+                raise FileNotFoundError("Bhagavad-gita.pdf not found")
             documents = SimpleDirectoryReader(input_files=["Bhagavad-gita.pdf"]).load_data()
+            print(f"✅ Loaded {len(documents)} documents in {time.time() - start_time:.2f}s")
             vector_store = QdrantVectorStore(client=qdrant_client, collection_name="bhagavad-gita")
             index = VectorStoreIndex.from_documents(documents, vector_store=vector_store, embed_model=embed_model)
-            print("✅ Document index created")
+            print(f"✅ Document index created in {time.time() - start_time:.2f}s")
             return
         except Exception as e:
-            print(f"Attempt {attempt+1}/{max_retries} failed: {e}")
+            print(f"❌ Attempt {attempt+1}/{max_retries} failed: {e}")
             if attempt == max_retries - 1:
                 raise
             time.sleep(2)
+
+# Initialize models at startup
+try:
+    print("🔍 Starting model initialization at app startup...")
+    initialize_models()
+    print("✅ All models initialized successfully")
+except Exception as e:
+    print(f"⚠️ Model initialization failed at startup: {e}. Will retry on first chat request.")
 
 # Email configuration
 SMTP_HOST = os.getenv("SMTP_HOST")
@@ -133,12 +145,16 @@ def send_email(recipient_email: str, subject: str, body_text: str) -> None:
     message["To"] = recipient_email
     message["Subject"] = subject
     message.attach(MIMEText(body_text, "plain", "utf-8"))
-    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
-        if SMTP_USE_TLS:
-            server.starttls()
-        server.login(SMTP_USERNAME, SMTP_PASSWORD)
-        server.sendmail(EMAIL_FROM, [recipient_email], message.as_string())
-        print(f"📧 Email sent to {recipient_email}")
+    try:
+        with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as server:
+            if SMTP_USE_TLS:
+                server.starttls()
+            server.login(SMTP_USERNAME, SMTP_PASSWORD)
+            server.sendmail(EMAIL_FROM, [recipient_email], message.as_string())
+            print(f"📧 Email sent to {recipient_email}")
+    except Exception as e:
+        print(f"❌ Email sending failed: {e}")
+        raise
 
 def get_user_id_from_request():
     auth_header = request.headers.get('Authorization')
@@ -155,58 +171,52 @@ def get_user_id_from_request():
                 print(f"✅ X-User-Id accepted as string: {x_user_id}")
                 return x_user_id
             print(f"⚠️ Invalid X-User-Id: {x_user_id}")
-    if not auth_header or not auth_header.startswith('Bearer '):
-        print("⚠️ Authorization header missing or not Bearer")
-        return None
-    token = auth_header.split(' ')[1]
-    print(f"🔐 Token (first 60 chars): {token[:60]}")
-    try:
-        user_data = json.loads(token)
-        user_id = user_data.get('user_id')
-        if user_id:
-            print(f"✅ Token parsed, user_id: {user_id}")
-            return user_id
-        print("⚠️ Token parsed but user_id missing")
-    except:
-        pass
-    try:
-        data = ast.literal_eval(token)
-        if isinstance(data, dict) and 'user_id' in data:
-            print(f"✅ Token parsed as Python literal, user_id: {data['user_id']}")
-            return data['user_id']
-    except:
-        pass
-    try:
-        oid = ObjectId(token)
-        print(f"✅ Token parsed as ObjectId: {str(oid)}")
-        return str(oid)
-    except:
-        pass
-    try:
-        m = re.search(r'"user_id"\s*:\s*"([0-9a-fA-F]{24})"', token)
-        if m:
-            print(f"✅ Token parsed via regex, user_id: {m.group(1)}")
-            return m.group(1)
-        m2 = re.search(r'user_id\s*:\s*([0-9a-fA-F]{24})', token)
-        if m2:
-            print(f"✅ Token parsed via regex (alt), user_id: {m2.group(1)}")
-            return m2.group(1)
-    except:
-        pass
-    print("❌ Unable to extract user_id from Authorization token")
+            return None
+    if auth_header and auth_header.startswith('Bearer '):
+        token = auth_header.split(' ')[1]
+        print(f"🔐 Token (first 60 chars): {token[:60]}")
+        try:
+            user_data = json.loads(token)
+            user_id = user_data.get('user_id')
+            if user_id:
+                print(f"✅ Token parsed, user_id: {user_id}")
+                return user_id
+        except:
+            try:
+                data = ast.literal_eval(token)
+                if isinstance(data, dict) and 'user_id' in data:
+                    print(f"✅ Token parsed as Python literal, user_id: {data['user_id']}")
+                    return data['user_id']
+            except:
+                try:
+                    oid = ObjectId(token)
+                    print(f"✅ Token parsed as ObjectId: {str(oid)}")
+                    return str(oid)
+                except:
+                    pass
+        try:
+            m = re.search(r'"user_id"\s*:\s*"([0-9a-fA-F]{24})"', token)
+            if m:
+                print(f"✅ Token parsed via regex, user_id: {m.group(1)}")
+                return m.group(1)
+        except:
+            pass
+    print("❌ Unable to extract user_id")
     return None
 
 # Search function
-def search(query, client, embed_model, k=5):
+def search(query, client, embed_model, k=3):  # Reduced k for faster queries
     collection_name = "bhagavad-gita"
     max_retries = 3
     retry_delay = 2
+    start_time = time.time()
     for attempt in range(max_retries):
         try:
             query_embedding = embed_model.get_query_embedding(query)
+            print(f"✅ Generated query embedding in {time.time() - start_time:.2f}s")
             break
         except Exception as e:
-            print(f"Error generating embedding (attempt {attempt+1}/{max_retries}): {e}")
+            print(f"❌ Embedding error (attempt {attempt+1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 return models.QueryResponse(points=[])
             time.sleep(retry_delay)
@@ -217,9 +227,10 @@ def search(query, client, embed_model, k=5):
                 query=query_embedding,
                 limit=k
             )
+            print(f"✅ Qdrant query completed in {time.time() - start_time:.2f}s")
             return result
         except Exception as e:
-            print(f"Error querying vector database (attempt {attempt+1}/{max_retries}): {e}")
+            print(f"❌ Qdrant query error (attempt {attempt+1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 return models.QueryResponse(points=[])
             time.sleep(retry_delay)
@@ -253,6 +264,7 @@ message_templates = [
 ]
 
 def pipeline(query, embed_model, llm, client):
+    start_time = time.time()
     has_hindi = bool(re.search(r'[ऀ-ॿ]', query))
     max_retries = 3
     retry_delay = 2
@@ -261,12 +273,14 @@ def pipeline(query, embed_model, llm, client):
             relevant_documents = search(query, client, embed_model)
             if relevant_documents and hasattr(relevant_documents, 'points') and len(relevant_documents.points) > 0:
                 context = [doc.payload['context'] for doc in relevant_documents.points]
-                context = "\n".join(context)
+                context = "\n".join(context)[:2000]  # Truncate context
+                print(f"✅ Retrieved {len(relevant_documents.points)} documents in {time.time() - start_time:.2f}s")
             else:
                 context = "No specific context found in the Bhagavad Gita. Providing a general answer based on Krishna's teachings."
+                print(f"⚠️ No documents found in {time.time() - start_time:.2f}s")
             break
         except Exception as e:
-            print(f"Error in retrieval (attempt {attempt+1}/{max_retries}): {e}")
+            print(f"❌ Retrieval error (attempt {attempt+1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 context = "Unable to retrieve specific context. Providing a general answer based on Krishna's teachings."
             time.sleep(retry_delay)
@@ -277,9 +291,10 @@ def pipeline(query, embed_model, llm, client):
     for attempt in range(max_retries):
         try:
             response = llm.complete(formatted_template)
+            print(f"✅ LLM response generated in {time.time() - start_time:.2f}s")
             return response
         except Exception as e:
-            print(f"LLM generation error (attempt {attempt+1}/{max_retries}): {e}")
+            print(f"❌ LLM generation error (attempt {attempt+1}/{max_retries}): {e}")
             if attempt == max_retries - 1:
                 return "I apologize, but I'm having trouble generating a response right now. Please try again later."
             time.sleep(retry_delay)
@@ -293,9 +308,11 @@ def extract_thinking_and_answer(response_text):
         answer = response_text[response_text.find("</think>") + 8:].strip()
         answer = re.sub(r'[\[\]]', '', answer)
         answer = re.sub(r'\n{3,}', '\n\n', answer).strip()
+        if len(answer) > 2000:
+            answer = answer[:2000] + '...'  # Truncate long answers
         return thinking, answer
     except Exception as e:
-        print(f"Error extracting thinking and answer: {e}")
+        print(f"❌ Error extracting thinking and answer: {e}")
         return "", str(response_text.text if hasattr(response_text, 'text') else response_text)
 
 # Routes
@@ -339,6 +356,7 @@ def cleanup_old_chats():
     try:
         threshold = time.time() - (30 * 24 * 3600)
         result = chat_history_collection.delete_many({"created_at": {"$lt": threshold}})
+        print(f"🧹 Deleted {result.deleted_count} old chats")
         return jsonify({"deleted": result.deleted_count})
     except Exception as e:
         print(f"❌ Error cleaning up chats: {e}")
@@ -348,6 +366,7 @@ def get_cached_response(prompt, user_id):
     try:
         cache = chat_history_collection.find_one({"user_id": user_id, "messages.0.content": prompt})
         if cache:
+            print(f"✅ Cache hit for prompt: {prompt}")
             return cache["messages"][1]["content"]
         return None
     except Exception as e:
@@ -357,6 +376,7 @@ def get_cached_response(prompt, user_id):
 @app.route('/api/chat', methods=['POST', 'OPTIONS'])
 @limiter.limit("5 per minute")
 def chat():
+    start_time = time.time()
     if request.method == "OPTIONS":
         print("🔍 Handling OPTIONS request for /api/chat")
         return jsonify({"status": "ok"}), 200
@@ -366,17 +386,20 @@ def chat():
     language = data.get('language', 'english')
     user_id = get_user_id_from_request()
     if not user_id:
-        print("❌ Authentication failed: No user_id extracted")
+        print(f"❌ Authentication failed after {time.time() - start_time:.2f}s: No user_id extracted")
         return jsonify({'error': 'Authentication Error: You do not have permission to access this resource. Please check your credentials.'}), 401
     if not prompt:
+        print(f"❌ No prompt provided after {time.time() - start_time:.2f}s")
         return jsonify({'error': 'No prompt provided'}), 400
     try:
         cached_response = get_cached_response(prompt, user_id)
         if cached_response:
-            print(f"✅ Cache hit for prompt: {prompt}")
+            print(f"✅ Cache hit in {time.time() - start_time:.2f}s")
             return jsonify({'response': cached_response, 'thinking': ''})
         if embed_model is None or llm is None or qdrant_client is None or index is None:
+            print(f"🔍 Re-initializing models in /api/chat...")
             initialize_models()
+            print(f"✅ Model re-init completed in {time.time() - start_time:.2f}s")
         has_hindi = bool(re.search(r'[ऀ-ॿ]', prompt))
         if language == 'hindi':
             modified_prompt = f"कृपया इस प्रश्न का उत्तर हिंदी में दें, भले ही प्रश्न किसी भी भाषा में हो। कृपया शुद्ध हिंदी का प्रयोग करें और उत्तर को स्पष्ट रूप से लिखें। पूर्ण वाक्यों में उत्तर दें: {prompt}"
@@ -390,24 +413,18 @@ def chat():
                         modified_prompt = f"निम्नलिखित हिंदी प्रश्न का उत्तर हिंदी में ही दें। कृपया शुद्ध हिंदी का प्रयोग करें और उत्तर को स्पष्ट रूप से लिखें। पूर्ण वाक्यों में उत्तर दें: {prompt}"
         else:
             modified_prompt = f"Please answer this question in English, regardless of the language it's asked in: {prompt}"
-        max_retries = 3
-        for attempt in range(max_retries):
-            try:
-                query_engine = index.as_query_engine(llm=llm)
-                full_response = query_engine.query(modified_prompt)
-                thinking, answer = extract_thinking_and_answer(full_response)
-                break
-            except Exception as e:
-                print(f"Chat error (attempt {attempt+1}/{max_retries}): {e}")
-                if attempt == max_retries - 1:
-                    return jsonify({'error': 'Failed to generate response after retries'}), 500
-                time.sleep(1)
+        query_engine = index.as_query_engine(llm=llm)
+        full_response = query_engine.query(modified_prompt)
+        print(f"✅ Query executed in {time.time() - start_time:.2f}s")
+        thinking, answer = extract_thinking_and_answer(full_response)
+        if len(answer) > 2000:
+            answer = answer[:2000] + '...'  # Truncate for HTTP/2
         if language == 'hindi':
             answer = re.sub(r'[\[\]]', '', answer)
             hindi_blocks = re.findall(r'([ऀ-ॿ0-9\s\n\r\t\-•\.,;:!?()"""''\u0020-\u0040\u005B-\u0060\u007B-\u007E]+)', answer)
             if hindi_blocks:
                 answer = max(hindi_blocks, key=len).strip()
-                if len(answer) < 20 and len(answer) < len(answer) * 0.3:
+                if len(answer) < 20 and len(answer) < len(full_response) * 0.3:
                     answer = re.sub(r'[\[\]]', '', answer).strip()
             answer = re.sub(r'\n{3,}', '\n\n', answer).strip()
             answer = re.sub(r'^(Here is|The answer|Answer|Response|In Hindi|Hindi translation)[:\s]*', '', answer, flags=re.IGNORECASE)
@@ -429,12 +446,15 @@ def chat():
                 ]
             }
             result = chat_history_collection.insert_one(chat_entry)
-            print(f"✅ Chat saved for user {user_id} with id {result.inserted_id}")
+            print(f"✅ Chat saved for user {user_id} with id {result.inserted_id} in {time.time() - start_time:.2f}s")
+        print(f"✅ /api/chat completed in {time.time() - start_time:.2f}s")
         return jsonify({'response': answer, 'thinking': thinking})
     except Exception as e:
-        print(f"Error in /api/chat: {e}")
+        print(f"❌ Error in /api/chat after {time.time() - start_time:.2f}s: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
+# Remaining routes unchanged for brevity (update_profile, get_history, etc.)
+# Include all other routes from your original file as-is
 @app.route('/api/history', methods=['GET', 'OPTIONS'])
 def get_history():
     if request.method == "OPTIONS":
