@@ -70,8 +70,10 @@ limiter = Limiter(
     default_limits=["100 per day", "10 per hour"],
     storage_uri="memory://"
 )
-# Exempt OPTIONS requests from rate limiting
-limiter.exempt(app, methods=["OPTIONS"])
+@app.before_request
+def skip_options_rate_limit():
+    if request.method == "OPTIONS":
+        return None  # Skip rate limiting for OPTIONS requests
 
 # Debug request logging
 @app.before_request
@@ -829,7 +831,7 @@ def delete_account():
         if not stored_otp:
             return jsonify({'error': 'Invalid OTP'}), 400
         if time.time() - stored_otp['created_at'] > 300:
-            return jsonify({'error': 'OTP expired'}), 400
+            return jupytext({'error': 'OTP expired'}), 400
         users_collection.delete_one({'_id': ObjectId(user_id)})
         chat_history_collection.delete_many({'user_id': user_id})
         otp_collection.delete_many({'email': email})
