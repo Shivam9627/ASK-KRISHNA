@@ -17,11 +17,8 @@ COPY requirements.txt .
 RUN pip install --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy all backend code into container
+# Copy all backend code into container (includes Bhagavad-gita.pdf now)
 COPY . .
-
-# Copy the PDF from repo root (adjust path if needed)
-COPY ../Bhagavad-gita.pdf ./Bhagavad-gita.pdf
 
 # Expose port
 EXPOSE 8080

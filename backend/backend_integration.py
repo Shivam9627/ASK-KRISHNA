@@ -105,7 +105,8 @@ def initialize_models():
             print("✅ Qdrant client initialized")
             
             print("🔍 Loading documents and creating index...")
-            documents = SimpleDirectoryReader(input_files=["../Bhagavad-gita.pdf"]).load_data()
+            # Updated path: PDF is now in the same directory as the app
+            documents = SimpleDirectoryReader(input_files=["Bhagavad-gita.pdf"]).load_data()
             vector_store = QdrantVectorStore(client=qdrant_client, collection_name="bhagavad-gita")
             index = VectorStoreIndex.from_documents(documents, vector_store=vector_store, embed_model=embed_model)
             print("✅ Document index created")
@@ -831,7 +832,7 @@ def delete_account():
         if not stored_otp:
             return jsonify({'error': 'Invalid OTP'}), 400
         if time.time() - stored_otp['created_at'] > 300:
-            return jupytext({'error': 'OTP expired'}), 400
+            return jsonify({'error': 'OTP expired'}), 400
         users_collection.delete_one({'_id': ObjectId(user_id)})
         chat_history_collection.delete_many({'user_id': user_id})
         otp_collection.delete_many({'email': email})
