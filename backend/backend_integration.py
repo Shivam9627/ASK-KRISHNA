@@ -453,8 +453,6 @@ def chat():
         print(f"❌ Error in /api/chat after {time.time() - start_time:.2f}s: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-# Remaining routes unchanged for brevity (update_profile, get_history, etc.)
-# Include all other routes from your original file as-is
 @app.route('/api/history', methods=['GET', 'OPTIONS'])
 def get_history():
     if request.method == "OPTIONS":
@@ -555,11 +553,14 @@ def delete_all_history():
         print(f"❌ Error deleting all history: {e}")
         return jsonify({'error': 'Internal server error'}), 500
 
-@app.route('/api/auth/register', methods=['POST', 'OPTIONS'])
+@app.route('/api/auth/register', methods=['GET', 'POST', 'OPTIONS'])
 def register():
     if request.method == "OPTIONS":
         print("🔍 Handling OPTIONS request for /api/auth/register")
         return jsonify({"status": "ok"}), 200
+    if request.method == "GET":
+        print("🔍 Handling GET request for /api/auth/register")
+        return jsonify({"message": "Use POST to register a new user."}), 200
     data = request.json
     username = data.get('username')
     email = data.get('email')
@@ -602,11 +603,14 @@ def register():
         'token': json.dumps(token_data)
     })
 
-@app.route('/api/auth/login', methods=['POST', 'OPTIONS'])
+@app.route('/api/auth/login', methods=['GET', 'POST', 'OPTIONS'])
 def login():
     if request.method == "OPTIONS":
         print("🔍 Handling OPTIONS request for /api/auth/login")
         return jsonify({"status": "ok"}), 200
+    if request.method == "GET":
+        print("🔍 Handling GET request for /api/auth/login")
+        return jsonify({"message": "Use POST to log in."}), 200
     data = request.json
     email = data.get('email')
     password = data.get('password')

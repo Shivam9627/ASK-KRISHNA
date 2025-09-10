@@ -12,7 +12,11 @@ const api = axios.create({
 // Add a request interceptor to include auth token and user ID
 api.interceptors.request.use(
   (config) => {
-    console.log('🔍 Base URL:', api.defaults.baseURL); // Debug URL
+    console.log('🔍 Sending request:', {
+      method: config.method.toUpperCase(),
+      url: config.url,
+      baseURL: api.defaults.baseURL,
+    });
     const user = localStorage.getItem('user');
     if (user) {
       try {
