@@ -14,28 +14,20 @@ const Login = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('🔍 Submitting login form with:', { email });
     
     // Simple validation
     if (!email || !password) {
-      console.warn('⚠️ Validation failed: Missing email or password');
       return setError('Please fill in all fields');
     }
     
     try {
       setError('');
       setLoading(true);
-      console.log('🔍 Calling authService.login');
       await login(email, password);
-      console.log('✅ Login successful, redirecting to /chat');
       navigate('/chat');
     } catch (err) {
-      console.error('❌ Login error:', {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
       setError('Failed to log in. Please check your credentials.');
+      console.error(err);
     } finally {
       setLoading(false);
     }

@@ -4,8 +4,6 @@
 __pycache__/
 *.py[cod]
 *$py.class
-app.py
-notebook
 
 # C extensions
 *.so

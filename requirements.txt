@@ -1,0 +1,11 @@
+# Backend Python dependencies
+flask
+flask-cors
+python-dotenv
+pymongo
+bson
+
+# Add any other backend dependencies here...
+
+# Frontend (React) dependencies - install separately with npm/yarn
+# See frontend/package.json for details

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { FaPaperPlane, FaTrash, FaSpinner, FaLanguage, FaMicrophone, FaVolumeUp } from 'react-icons/fa';
+import { FaPaperPlane, FaTrash, FaSpinner, FaLanguage, FaPlay, FaPause, FaMicrophone, FaMicrophoneSlash, FaCog } from 'react-icons/fa';
 import ReactMarkdown from 'react-markdown';
 import { useAuth } from '../../contexts/AuthContext';
 import { chatService } from '../../services/api';
@@ -10,83 +10,76 @@ const Chat = () => {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
-  const [language, setLanguage] = useState('hindi');
-  const [error, setError] = useState('');
-  const [isListening, setIsListening] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(null); // Track which message is being spoken
+  const [language, setLanguage] = useState('english'); // Default language
   const messagesEndRef = useRef(null);
-  const recognitionRef = useRef(null);
-  const { currentUser } = useAuth();
+  const { currentUser, incrementQuestionCount, questionCount, clearChatHistory } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [isHistoryView, setIsHistoryView] = useState(false);
   const [historyLoading, setHistoryLoading] = useState(false);
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
 
-  // Initialize SpeechRecognition
-  useEffect(() => {
-    if ('SpeechRecognition' in window || 'webkitSpeechRecognition' in window) {
-      const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      recognitionRef.current = new SpeechRecognition();
-      recognitionRef.current.lang = language === 'hindi' ? 'hi-IN' : 'en-IN';
-      recognitionRef.current.interimResults = true;
-      recognitionRef.current.continuous = false;
+  // Audio state
+  const [playingIdx, setPlayingIdx] = useState(null);
+  const [isPaused, setIsPaused] = useState(false);
+  // Voice input/output state
+  const [isListening, setIsListening] = useState(false);
+  const recognitionRef = useRef(null);
+  const [voices, setVoices] = useState([]);
+  const [selectedVoice, setSelectedVoice] = useState(localStorage.getItem('ttsVoice') || '');
+  const [ttsRate, setTtsRate] = useState(parseFloat(localStorage.getItem('ttsRate') || '1'));
+  const [ttsPitch, setTtsPitch] = useState(parseFloat(localStorage.getItem('ttsPitch') || '1'));
+  const [autoSpeak, setAutoSpeak] = useState(localStorage.getItem('autoSpeak') === 'true');
+  const [showVoiceControls, setShowVoiceControls] = useState(false);
 
-      recognitionRef.current.onresult = (event) => {
-        const transcript = Array.from(event.results)
-          .map(result => result[0].transcript)
-          .join('');
-        setInput(transcript);
-        console.log('🎙️ Speech recognized:', transcript);
-      };
-
-      recognitionRef.current.onerror = (event) => {
-        console.error('❌ Speech recognition error:', event.error);
-        setIsListening(false);
-        if (event.error === 'no-speech') {
-          setError('No speech detected. Please try again.');
-        } else if (event.error === 'not-allowed') {
-          setError('Microphone permission denied. Please enable it in your browser settings.');
-        } else {
-          setError('Speech recognition failed. Please try again.');
-        }
-      };
-
-      recognitionRef.current.onend = () => {
-        setIsListening(false);
-        console.log('🎙️ Speech recognition stopped');
-      };
-    } else {
-      console.warn('⚠️ SpeechRecognition API not supported in this browser');
-      setError('Speech recognition is not supported in your browser.');
-    }
-  }, [language]);
-
-  // Check authentication status
+  // Check if user is authenticated
   useEffect(() => {
     if (!currentUser) {
       setShowLoginPrompt(true);
-      setMessages([]);
-      setIsHistoryView(false);
     } else {
       setShowLoginPrompt(false);
     }
   }, [currentUser]);
 
-  // Load saved language preference
+  // Persist language preference
   useEffect(() => {
     const storedLang = localStorage.getItem('chatLanguage');
-    if (storedLang) {
-      console.log('🔍 Loading saved language:', storedLang);
-      setLanguage(storedLang);
-    }
+    if (storedLang) setLanguage(storedLang);
   }, []);
-
-  // Save language preference
   useEffect(() => {
-    console.log('🔍 Saving language to localStorage:', language);
     localStorage.setItem('chatLanguage', language);
   }, [language]);
+
+  // Load available TTS voices
+  useEffect(() => {
+    const loadVoices = () => {
+      const v = window.speechSynthesis?.getVoices?.() || [];
+      setVoices(v);
+      // If no selection yet, try default by language
+      if (!selectedVoice && v.length) {
+        const byLang = v.find(voice => language === 'hindi' ? voice.lang === 'hi-IN' : voice.lang.startsWith('en'));
+        if (byLang) setSelectedVoice(byLang.name);
+      }
+    };
+    loadVoices();
+    if (typeof window !== 'undefined' && window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, [language, selectedVoice]);
+
+  // Persist TTS prefs
+  useEffect(() => {
+    localStorage.setItem('ttsVoice', selectedVoice || '');
+  }, [selectedVoice]);
+  useEffect(() => {
+    localStorage.setItem('ttsRate', String(ttsRate));
+  }, [ttsRate]);
+  useEffect(() => {
+    localStorage.setItem('ttsPitch', String(ttsPitch));
+  }, [ttsPitch]);
+  useEffect(() => {
+    localStorage.setItem('autoSpeak', String(autoSpeak));
+  }, [autoSpeak]);
 
   // Scroll to bottom of messages
   const scrollToBottom = () => {
@@ -97,187 +90,216 @@ const Chat = () => {
     scrollToBottom();
   }, [messages]);
 
-  // Load chat history if viewing a specific chat
+  // Load messages from localStorage on component mount
+  useEffect(() => {
+    const savedMessages = localStorage.getItem('chatMessages');
+    if (savedMessages) {
+      const filtered = JSON.parse(savedMessages).filter(
+        msg => msg.role === 'user' || msg.role === 'assistant'
+      );
+      setMessages(filtered);
+    }
+  }, []);
+
+  // Save messages to localStorage when they change
+  useEffect(() => {
+    if (messages.length > 0) {
+      const filtered = messages.filter(
+        msg => msg.role === 'user' || msg.role === 'assistant'
+      );
+      localStorage.setItem('chatMessages', JSON.stringify(filtered));
+    }
+  }, [messages]);
+
+  // Clear chat history and question count on logout
+  useEffect(() => {
+    if (!currentUser) {
+      clearChatHistory();
+      setMessages([]);
+    }
+  }, [currentUser, clearChatHistory]);
+
+  // Load conversation by ID if present in URL (from history)
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const chatId = params.get('id');
     if (chatId && currentUser) {
       setHistoryLoading(true);
-      console.log('🔍 Fetching chat by ID:', chatId);
       chatService.getChatById(chatId)
         .then(chat => {
-          console.log('✅ Chat loaded:', chat);
-          const chatMessages = chat.messages?.filter(
+          setMessages(chat.messages?.filter(
             msg => msg.role === 'user' || msg.role === 'assistant'
-          ) || [];
-          setMessages(chatMessages);
+          ) || []);
           setIsHistoryView(true);
         })
-        .catch(error => {
-          console.error('❌ Error loading chat history:', error);
-          setError('Failed to load chat history. Please try again.');
+        .catch(() => {
           setMessages([]);
-          setIsHistoryView(true);
         })
-        .finally(() => {
-          setHistoryLoading(false);
-        });
+        .finally(() => setHistoryLoading(false));
     } else {
       setIsHistoryView(false);
-      setMessages([]);
     }
   }, [location.search, currentUser]);
 
-  // Handle speech input
-  const handleMicClick = () => {
-    if (!recognitionRef.current) {
-      setError('Speech recognition is not supported in your browser.');
-      return;
-    }
-    if (isListening) {
-      recognitionRef.current.stop();
-      setIsListening(false);
+  // Enhanced speech synthesis with play/pause and Hindi support + smoother controls
+  const handlePlayPause = (text, idx, lang) => {
+    if (playingIdx === idx && !isPaused) {
+      window.speechSynthesis.pause();
+      setIsPaused(true);
+    } else if (playingIdx === idx && isPaused) {
+      window.speechSynthesis.resume();
+      setIsPaused(false);
     } else {
-      try {
-        recognitionRef.current.lang = language === 'hindi' ? 'hi-IN' : 'en-IN';
-        recognitionRef.current.start();
-        setIsListening(true);
-        setError('');
-        console.log('🎙️ Starting speech recognition in', recognitionRef.current.lang);
-      } catch (err) {
-        console.error('❌ Error starting speech recognition:', err);
-        setError('Failed to start speech recognition. Please check microphone permissions.');
-        setIsListening(false);
+      window.speechSynthesis.cancel();
+      const utterance = new window.SpeechSynthesisUtterance(text);
+      const allVoices = window.speechSynthesis.getVoices();
+      // Resolve preferred voice
+      let voiceToUse = allVoices.find(v => v.name === selectedVoice);
+      if (!voiceToUse) {
+        voiceToUse = allVoices.find(v => lang === 'hindi' ? v.lang === 'hi-IN' : v.lang.startsWith('en'));
       }
-    }
-  };
-
-  // Handle text-to-speech
-  const handleSpeak = (text, messageIndex) => {
-    if ('speechSynthesis' in window) {
-      if (isSpeaking === messageIndex) {
-        window.speechSynthesis.cancel();
-        setIsSpeaking(null);
-        console.log('🔊 Stopped speaking');
-        return;
-      }
-
-      window.speechSynthesis.cancel(); // Cancel any ongoing speech
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.lang = language === 'hindi' ? 'hi-IN' : 'en-IN';
-
-      // Select appropriate voice
-      const voices = window.speechSynthesis.getVoices();
-      const voice = voices.find(v => v.lang === (language === 'hindi' ? 'hi-IN' : 'en-IN')) || voices[0];
-      utterance.voice = voice;
-      utterance.volume = 1.0;
-      utterance.rate = 1.0;
-      utterance.pitch = 1.0;
-
-      utterance.onstart = () => {
-        setIsSpeaking(messageIndex);
-        console.log('🔊 Started speaking:', text.substring(0, 50) + '...');
-      };
+      if (voiceToUse) utterance.voice = voiceToUse;
+      utterance.lang = lang === 'hindi' ? 'hi-IN' : (voiceToUse?.lang || 'en-US');
+      // Apply smoother parameters
+      utterance.rate = Math.max(0.6, Math.min(1.4, ttsRate));
+      utterance.pitch = Math.max(0.5, Math.min(1.8, ttsPitch));
+      utterance.volume = 1;
       utterance.onend = () => {
-        setIsSpeaking(null);
-        console.log('🔊 Finished speaking');
+        setPlayingIdx(null);
+        setIsPaused(false);
       };
-      utterance.onerror = (event) => {
-        console.error('❌ Speech synthesis error:', event.error);
-        setIsSpeaking(null);
-        setError('Failed to play audio. Please try again.');
-      };
-
+      setPlayingIdx(idx);
+      setIsPaused(false);
       window.speechSynthesis.speak(utterance);
-    } else {
-      console.warn('⚠️ SpeechSynthesis API not supported in this browser');
-      setError('Text-to-speech is not supported in your browser.');
     }
   };
 
-  // Handle sending a message
+  const speakAssistant = (text) => {
+    // Speak without play/pause UI index
+    const utterance = new window.SpeechSynthesisUtterance(text);
+    const allVoices = window.speechSynthesis.getVoices();
+    let voiceToUse = allVoices.find(v => v.name === selectedVoice);
+    if (!voiceToUse) {
+      voiceToUse = allVoices.find(v => language === 'hindi' ? v.lang === 'hi-IN' : v.lang.startsWith('en'));
+    }
+    if (voiceToUse) utterance.voice = voiceToUse;
+    utterance.lang = language === 'hindi' ? 'hi-IN' : (voiceToUse?.lang || 'en-US');
+    utterance.rate = Math.max(0.6, Math.min(1.4, ttsRate));
+    utterance.pitch = Math.max(0.5, Math.min(1.8, ttsPitch));
+    utterance.volume = 1;
+    window.speechSynthesis.speak(utterance);
+  };
+
+  // Voice input: Web Speech API SpeechRecognition
+  const startListening = () => {
+    try {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) return;
+      const recog = new SR();
+      recog.lang = language === 'hindi' ? 'hi-IN' : 'en-US';
+      recog.interimResults = true;
+      recog.continuous = false;
+      recognitionRef.current = recog;
+      setIsListening(true);
+      recog.onresult = (event) => {
+        let finalText = '';
+        for (let i = event.resultIndex; i < event.results.length; i += 1) {
+          const transcript = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            finalText += transcript + ' ';
+          } else {
+            // show interim in input for responsiveness
+            setInput(transcript);
+          }
+        }
+        if (finalText.trim()) setInput(prev => (prev ? (prev + ' ' + finalText).trim() : finalText.trim()));
+      };
+      recog.onerror = () => setIsListening(false);
+      recog.onend = () => setIsListening(false);
+      recog.start();
+    } catch (e) {
+      setIsListening(false);
+    }
+  };
+  const stopListening = () => {
+    setIsListening(false);
+    const recog = recognitionRef.current;
+    try { recog && recog.stop(); } catch {}
+  };
+  const toggleListening = () => {
+    if (isListening) stopListening(); else startListening();
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
+
     if (!input.trim()) return;
+    
+    // Check if user is authenticated
     if (!currentUser) {
       setShowLoginPrompt(true);
       return;
     }
-    if (isHistoryView) {
-      setError('Cannot send messages in history view. Start a new chat.');
-      return;
-    }
+    
+    if (isHistoryView) return; // Prevent sending in history view
 
-    const userMessage = { role: 'user', content: input };
-    setMessages(prev => [...prev, userMessage]);
+    // Add the user message immediately
+    setMessages(prev => [...prev, { role: 'user', content: input }]);
     setInput('');
     setIsLoading(true);
-    setError('');
 
     try {
-      console.log('🔍 Sending message:', input, 'Language:', language);
+      // Call the actual backend API using the chatService
       const response = await chatService.sendMessage(input, language);
-      console.log('✅ API response:', response);
 
-      const responseContent = response.response || 'Sorry, no response received';
-      setMessages(prev => [...prev, { role: 'assistant', content: responseContent }]);
-    } catch (error) {
-      console.error('❌ Error sending message:', error);
-      console.log('Error details:', {
-        message: error.message,
-        response: error.response,
-        status: error.response?.status,
-        data: error.response?.data
-      });
-      let errorMessage = 'Sorry, there was an error processing your request. Please try again.';
-      if (error.response?.status === 401) {
-        errorMessage = 'Session expired. Please log in again.';
-        setShowLoginPrompt(true);
-      } else if (error.response?.status === 400) {
-        errorMessage = error.response.data?.error || 'Invalid request. Please check your input.';
-      } else if (error.response?.status === 500) {
-        errorMessage = 'Server error. Please try again later or contact support.';
+      // Format the response from the backend
+      let responseContent;
+      if (response.response) {
+        responseContent = response.response;
+      } else {
+        responseContent = typeof response === 'string' ? response : JSON.stringify(response);
       }
-      setError(errorMessage);
-      setMessages(prev => [...prev, { role: 'assistant', content: errorMessage }]);
+
+      // Only store user and assistant messages (no thinking)
+      const assistantMessage = {
+        role: 'assistant',
+        content: responseContent
+      };
+
+      setMessages(prevMessages => [...prevMessages, assistantMessage]);
+      if (autoSpeak && typeof window !== 'undefined' && window.speechSynthesis) {
+        speakAssistant(responseContent);
+      }
+    } catch (error) {
+      console.error('Error sending message:', error);
+      const errorMessage = {
+        role: 'assistant',
+        content: 'Sorry, there was an error processing your request. Please try again.'
+      };
+      setMessages(prevMessages => [...prevMessages, errorMessage]);
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Clear chat messages
   const clearChat = () => {
-    if (isHistoryView) {
-      setError('Cannot clear messages in history view.');
-      return;
-    }
     setMessages([]);
-    setError('');
     localStorage.removeItem('chatMessages');
-    console.log('🗑️ Chat messages cleared');
   };
 
-  // Toggle language between English and Hindi
   const toggleLanguage = () => {
-    setLanguage(prev => {
-      const newLang = prev === 'english' ? 'hindi' : 'english';
-      console.log('🔄 Switching language to:', newLang);
-      return newLang;
-    });
+    setLanguage(prev => prev === 'english' ? 'hindi' : 'english');
   };
 
-  // Redirect to login or register
   const handleLoginRedirect = () => {
-    console.log('🔍 Redirecting to login');
     navigate('/login');
   };
 
   const handleRegisterRedirect = () => {
-    console.log('🔍 Redirecting to register');
     navigate('/register');
   };
 
-  // Render login prompt if not authenticated
+  // Show login prompt for unauthenticated users
   if (showLoginPrompt) {
     return (
       <div className="chat-container">
@@ -308,6 +330,23 @@ const Chat = () => {
       <div className="chat-header">
         <h1>Chat with Krishna</h1>
         <div className="chat-actions">
+          {/* Voice settings toggle */}
+          <button
+            className="voice-settings"
+            onClick={() => setShowVoiceControls(s => !s)}
+            title="Voice settings"
+          >
+            <FaCog />
+          </button>
+          {/* Microphone input */}
+          <button
+            className={`mic-button ${isListening ? 'active' : ''}`}
+            onClick={toggleListening}
+            title={isListening ? 'Stop voice input' : 'Start voice input'}
+            type="button"
+          >
+            {isListening ? <FaMicrophoneSlash /> : <FaMicrophone />}
+          </button>
           <button
             className="language-toggle"
             onClick={toggleLanguage}
@@ -316,79 +355,127 @@ const Chat = () => {
             <FaLanguage />
             <span>{language === 'english' ? 'EN' : 'HI'}</span>
           </button>
-          <button
-            className="clear-chat"
-            onClick={clearChat}
-            title="Clear chat history"
-            disabled={isHistoryView}
-          >
+          <button className="clear-chat" onClick={clearChat} title="Clear chat history">
             <FaTrash />
           </button>
         </div>
       </div>
 
-      {error && (
-        <div className="error-message">
-          {error}
-          <span className="close-btn" onClick={() => setError('')}>
-            &times;
-          </span>
-        </div>
-      )}
-
       {historyLoading ? (
-        <div className="loading-indicator">
-          <FaSpinner className="spinner" />
-          Loading conversation...
-        </div>
+        <div className="loading-indicator"><FaSpinner className="spinner" /> Loading conversation...</div>
       ) : (
-        <div className="messages-container">
-          {messages.length === 0 ? (
-            <div className="empty-chat">
-              <img src="/logo3.png" alt="ASK KRISHNA Logo" className="empty-chat-logo" />
-              <h2>Welcome to ASK KRISHNA</h2>
-              <p>Ask any question about the Bhagavad Gita</p>
-            </div>
-          ) : (
-            messages.map((msg, idx) => (
-              <div key={idx} className={`message-row ${msg.role}-row`}>
-                {msg.role === 'assistant' && (
-                  <button
-                    className={`listen-btn ${isSpeaking === idx ? 'playing' : ''}`}
-                    onClick={() => handleSpeak(msg.content, idx)}
-                    title={isSpeaking === idx ? 'Stop' : 'Listen'}
-                  >
-                    <span className="listen-btn-icon">
-                      <FaVolumeUp />
-                    </span>
-                    {isSpeaking === idx && (
-                      <div className="listen-btn-waves">
-                        <span></span>
-                        <span></span>
-                        <span></span>
-                      </div>
-                    )}
-                  </button>
-                )}
-                <div className={`message ${msg.role}`}>
-                  <div className={`message-bubble ${msg.role}-bubble`}>
-                    <ReactMarkdown>{msg.content}</ReactMarkdown>
-                  </div>
-                </div>
+        <>
+          <div className="messages-container">
+            {messages.length === 0 ? (
+              <div className="empty-chat">
+                <img src="/logo3.png" alt="ASK KRISHNA Logo" className="empty-chat-logo" />
+                <h2>Welcome to ASK KRISHNA</h2>
+                <p>Ask any question about the Bhagavad Gita</p>
               </div>
-            ))
-          )}
-          {isLoading && !isHistoryView && (
-            <div className="message-row assistant-row">
+            ) : (
+              messages.map((msg, idx) => {
+                const isUser = msg.role === 'user';
+                return (
+                  <div
+                    key={idx}
+                    className={`message-row ${isUser ? 'user-row' : 'assistant-row'}`}
+                    style={{ display: 'flex', alignItems: 'flex-end', marginBottom: '16px' }}
+                  >
+                    {/* Play button for assistant messages */}
+                    {!isUser && (
+                      <button
+                        className="listen-btn"
+                        title={
+                          playingIdx === idx
+                            ? isPaused
+                              ? 'Resume'
+                              : 'Pause'
+                            : 'Play'
+                        }
+                        onClick={() => handlePlayPause(msg.content, idx, language)}
+                        style={{
+                          marginRight: '10px',
+                          cursor: 'pointer',
+                          fontSize: '1.5em',
+                          background: playingIdx === idx ? '#e0f7fa' : '#f0f0f0',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '40px',
+                          height: '40px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          boxShadow: '0 2px 8px rgba(0,0,0,0.08)'
+                        }}
+                      >
+                        {playingIdx === idx ? (
+                          isPaused ? <FaPlay /> : <FaPause />
+                        ) : (
+                          <FaPlay />
+                        )}
+                      </button>
+                    )}
+                    <div
+                      className={`message-bubble ${isUser ? 'user-bubble' : 'assistant-bubble'}`}
+                      style={{
+                        maxWidth: '70%',
+                        padding: '12px 18px',
+                        borderRadius: isUser ? '18px 18px 4px 18px' : '18px 18px 18px 4px',
+                        background: isUser ? '#1976d2' : '#f5f5f5',
+                        color: isUser ? '#fff' : '#222',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.08)',
+                        marginLeft: isUser ? 'auto' : '0',
+                        marginRight: isUser ? '0' : 'auto',
+                        position: 'relative',
+                      }}
+                    >
+                      <ReactMarkdown>{msg.content}</ReactMarkdown>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+            {isLoading && !isHistoryView && (
               <div className="message assistant loading">
                 <div className="loading-indicator">
                   <FaSpinner className="spinner" />
                   <span>Krishna is thinking...</span>
                 </div>
               </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
+            )}
+            <div ref={messagesEndRef} />
+          </div>
+        </>
+      )}
+      {showVoiceControls && (
+        <div className="voice-controls">
+          <div className="control">
+            <label>Voice
+              <select value={selectedVoice} onChange={e => setSelectedVoice(e.target.value)}>
+                <option value="">System default</option>
+                {voices
+                  .filter(v => language === 'hindi' ? v.lang === 'hi-IN' : v.lang.startsWith('en'))
+                  .map(v => (
+                    <option key={`${v.name}-${v.lang}`} value={v.name}>{v.name} ({v.lang})</option>
+                  ))}
+              </select>
+            </label>
+          </div>
+          <div className="control">
+            <label>Rate: {ttsRate.toFixed(2)}
+              <input type="range" min="0.6" max="1.4" step="0.05" value={ttsRate} onChange={e => setTtsRate(parseFloat(e.target.value))} />
+            </label>
+          </div>
+          <div className="control">
+            <label>Pitch: {ttsPitch.toFixed(2)}
+              <input type="range" min="0.5" max="1.8" step="0.05" value={ttsPitch} onChange={e => setTtsPitch(parseFloat(e.target.value))} />
+            </label>
+          </div>
+          <div className="control toggle">
+            <label>
+              <input type="checkbox" checked={autoSpeak} onChange={e => setAutoSpeak(e.target.checked)} /> Auto read replies
+            </label>
+          </div>
         </div>
       )}
 
@@ -400,15 +487,6 @@ const Chat = () => {
           placeholder="Ask a question about the Bhagavad Gita..."
           disabled={isLoading || isHistoryView}
         />
-        <button
-          type="button"
-          className={`mic-button ${isListening ? 'active' : ''}`}
-          onClick={handleMicClick}
-          title={isListening ? 'Stop Listening' : 'Start Listening'}
-          disabled={isLoading || isHistoryView}
-        >
-          <FaMicrophone />
-        </button>
         <button type="submit" disabled={isLoading || !input.trim() || isHistoryView}>
           <FaPaperPlane />
         </button>

@@ -29,14 +29,17 @@ const History = () => {
         setError('');
         console.log('🔍 Fetching chat history for user:', currentUser.user_id);
         
-        const history = await chatService.getHistory();
+        const history = await chatService.getChatHistory();
         console.log('✅ Chat history received:', history);
         
+        // Ensure history is an array
         let historyArray = Array.isArray(history) ? history : [];
+        // Ensure most recent first on client too, in case backend order changes
         historyArray = historyArray.sort((a, b) => {
           const ta = (a.created_at ?? 0);
           const tb = (b.created_at ?? 0);
           if (tb !== ta) return tb - ta;
+          // Fallback to _id timestamp if needed
           return (b._id || '').localeCompare(a._id || '');
         });
         console.log('📊 Processed history array:', historyArray);
@@ -99,7 +102,7 @@ const History = () => {
     if (!currentUser) return;
     if (!window.confirm('Delete all your chat history? This cannot be undone.')) return;
     try {
-      await chatService.deleteAllHistory();
+      await chatService.deleteAllChats();
       setChatHistory([]);
       setFilteredHistory([]);
     } catch (e) {

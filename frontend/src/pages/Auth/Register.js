@@ -20,21 +20,17 @@ const Register = () => {
 
   const handleSendOTP = async (e) => {
     e.preventDefault();
-    console.log('🔍 Sending OTP for registration:', { username, email });
     
     // Simple validation
     if (!username || !email || !password || !confirmPassword) {
-      console.warn('⚠️ Validation failed: Missing fields');
       return setError('Please fill in all fields');
     }
     
     if (password !== confirmPassword) {
-      console.warn('⚠️ Validation failed: Passwords do not match');
       return setError('Passwords do not match');
     }
     
     if (password.length < 6) {
-      console.warn('⚠️ Validation failed: Password too short');
       return setError('Password must be at least 6 characters');
     }
     
@@ -42,16 +38,11 @@ const Register = () => {
       setError('');
       setLoading(true);
       await authService.sendRegistrationOTP(email);
-      console.log('✅ OTP sent successfully');
       setOtpSent(true);
       setStep(2);
     } catch (err) {
-      console.error('❌ Error sending OTP:', {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
       setError(err.response?.data?.error || 'Failed to send OTP');
+      console.error(err);
     } finally {
       setLoading(false);
     }
@@ -59,47 +50,36 @@ const Register = () => {
 
   const handleVerifyOTP = async (e) => {
     e.preventDefault();
-    console.log('🔍 Verifying OTP for:', { email, otp });
     
     if (!otp.trim()) {
-      console.warn('⚠️ Validation failed: Missing OTP');
       return setError('Please enter the OTP');
     }
     
     try {
       setError('');
       setLoading(true);
+      
+      // Verify OTP
       await authService.verifyRegistrationOTP(email, otp);
-      console.log('✅ OTP verified, registering user');
+      
+      // Register user
       await register(username, email, password);
-      console.log('✅ Registration successful, redirecting to /chat');
       navigate('/chat');
     } catch (err) {
-      console.error('❌ Error verifying OTP or registering:', {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
       setError(err.response?.data?.error || 'Failed to verify OTP or create account');
+      console.error(err);
     } finally {
       setLoading(false);
     }
   };
 
   const handleResendOTP = async () => {
-    console.log('🔍 Resending OTP for:', { email });
     try {
       setError('');
       setLoading(true);
       await authService.sendRegistrationOTP(email);
-      console.log('✅ OTP resent successfully');
       setError('');
     } catch (err) {
-      console.error('❌ Error resending OTP:', {
-        message: err.message,
-        status: err.response?.status,
-        data: err.response?.data,
-      });
       setError(err.response?.data?.error || 'Failed to resend OTP');
     } finally {
       setLoading(false);
@@ -107,7 +87,6 @@ const Register = () => {
   };
 
   const goBack = () => {
-    console.log('🔍 Going back to registration form');
     setStep(1);
     setOtp('');
     setError('');
